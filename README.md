@@ -1,124 +1,127 @@
-# 📁 Sistem Arsip Digital — Kantor Pertanahan (v3 Lokal)
+# Sistem Arsip — Kantor Pertanahan (Lokal / Zero Cost)
 
-Aplikasi pengelolaan arsip digital untuk **Kantor Pertanahan / BPN**. Berjalan **100% lokal** di satu komputer atau LAN kantor — tanpa internet, tanpa biaya lisensi, tanpa akun cloud. **Rupiah pas-pasan? Tetap bisa punya sistem arsip paling canggih — gratis total.**
+Aplikasi web pengarsipan dokumen untuk **Kantor Pertanahan** (bekas BPN).
+Berjalan 100% lokal di komputer Anda, **tanpa biaya** dan tanpa internet (data tidak dikirim ke mana-mana).
 
-## ✨ Modul
+## Fitur
 
-| Modul | Deskripsi |
-|-------|-----------|
-| 📊 **Dashboard** | Statistik arsip, penyimpanan database, arsip terbaru, tren & status arsip |
-| 📦 **Arsip Dokumen** | Registrasi, upload file, nomor arsip otomatis per kategori, kategori/lokasi/unit/instansi, QR code, cari & filter, edit, hapus lunak/permanen |
-| 🖨️ **Scan / OCR Dokumen** 🆕 | Baca isi setiap dokumen (foto/PDF) langsung di browser, **100% offline tanpa biaya** — hasil tersimpan & bisa dicari |
-| 🔎 **Cari Isi Dokumen** 🆕 | Pencarian teks penuh (FTS) ke seluruh isi arsip — termasuk hasil OCR, kata di-highlight otomatis |
-| 🗄️ **Database & Cadangan** 🆕 | Penjelajah tabel, edit/tambah/hapus baris, lihat skema & indeks, konsol SQL (SELECT / INSERT / UPDATE / DROP / CREATE), backup otomatis, restore, cek integritas, vacuum — semua untuk admin |
-| 🗑️ **Tempat Sampah** | Pulihkan atau hapus permanen; kosongkan sampah |
-| 🔀 **Disposisi** | Penerusan arsip ke unit/seksi, tanda baca, prioritas |
-| 📤 **Peminjaman** | Catat peminjaman & pengembalian arsip |
-| 📖 **Buku Agenda** | Agenda surat masuk & keluar, nomor agenda otomatis |
-| 📅 **Kalender** | Kalender aktivitas arsip |
-| 📈 **Laporan & Ekspor** | Rekap arsip, cetak ber-kop surat, ekspor CSV / Excel (XLSX), backup database (JSON) |
-| 🗂️ **Master Data** | Kategori, lokasi rak, unit/seksi, instansi |
-| 👥 **Manajemen Pengguna** | Multi-akun admin / staf / kepala + email & telepon, aktif/nonaktif, reset password, mata-mata online |
-| 🛡️ **Log Aktivitas** | Rekam jejak aktivitas pengguna |
-| 👤 **Profil Kantor** | Kop surat untuk cetak laporan |
+- **Login & Role** — admin, staf, kepala (hak akses berbeda)
+- **Password aman (bcrypt)** — password di-hash, tersedia fitur ganti password & reset password
+- **CRUD Arsip** — tambah, lihat, ubah, hapus arsip (surat masuk/keluar, sertifikat, SK, dll) dengan status (aktif, arsip, dipinjam, hilang, rusak)
+- **Nomor arsip otomatis** — format `KODE/TAHUN/0001` berdasarkan kategori
+- **Kategori Arsip** — kelola kategori (SKM, SKG, SKB, SM, SKL, SHM, HGB, HGU, LPJ, dll)
+- **Master Data** — kelola lokasi arsip (rak/lemari), unit/bidang, dan instansi pengirim/penerima
+- **Disposisi** — alihkan arsip ke pejabat/petugas dengan instruksi, status, dan notifikasi otomatis
+- **Peminjaman** — catat peminjaman, jatuh tempo, penanda arsip dipinjam, dan deteksi keterlambatan
+- **Upload/Download lampiran** — PDF, JPG, PNG, DOC, DOCX, XLS, TXT (maks 50MB) via klik atau drag-and-drop
+- **Barcode / QR** — setiap arsip punya kode QR yang bisa dicetak untuk pelacakan fisik
+- **Pencarian & filter** — by nomor, judul, perihal, kategori, status, instansi, lokasi, rentang tanggal
+- **Tempat Sampah** — hapus lunak (soft delete), pulihkan, atau hapus permanen
+- **Dashboard statistik** — hero sapaan + jam realtime, kartu animasi (count-up), donat status arsip, arsip per kategori, tren 12 bulan, agenda hari ini, peminjaman aktif, disposisi & aktivitas terbaru
+- **Buku Agenda** — agenda surat masuk/keluar dengan nomor urut otomatis per tahun, filter tahun & jenis
+- **Kalender Kegiatan** — agenda kegiatan (rapat/verifikasi/pelayanan/dll) tampilan kalender bulanan + daftar + tambah cepat
+- **Profil Kantor & Kop Surat** — atur identitas instansi, kepala, kontak; dipakai pada cetakan laporan bertanda kop
+- **Laporan & Ekspor (CSV, Excel .xlsx)** — rekap arsip per tanggal/kategori, cetak laporan dengan kop surat, ekspor Excel bergaya (header hijau BPN)
+- **Import CSV** — masukkan arsip massal dari berkas CSV dengan laporan berhasil/gagal per baris
+- **Backup JSON** — unduh cadangan seluruh database (profil, pengguna, arsip, disposisi, peminjaman, agenda, log) sekali klik
+- **Notifikasi** — pemberitahuan disposisi & peminjaman (badge + dropdown)
+- **Log aktivitas** — riwayat semua aksi pengguna
+- **Manajemen Pengguna** — tambah/ubah user, aktif/nonaktif, reset password (khusus admin)
+- **Mode responsif** — bisa dipakai di HP/tablet
+- **Tampilan pemerintah modern** — warna hijau/toska + aksen emas, panel warna "gov-stripe", header & footer resmi kantor
+- **Animasi halus** — splash screen, transisi halaman, angka berjalan, donat chart, bar animasi, scroll-reveal, modal & toast
+- **Font offline** — semua font (Lora & Plus Jakarta Sans) disimpan lokal di `public/fonts/`
 
-## 🛠️ Teknologi (Semua Gratis)
+## Kebutuhan
 
-- **Backend**: Node.js + Express.js
-- **Database**: SQLite bawaan Node (`node:sqlite`) + SQLite **FTS5** untuk pencarian isi dokumen — tanpa server, tanpa instalasi tambahan
-- **OCR**: Tesseract.js + PDF.js **didampingi langsung** (wasm + bahasa Indonesia/Inggris) — hasil OCR diproses *di komputer Anda*, tidak ada data yang keluar
-- **Frontend**: Single-Page Application vanilla JS + CSS kustom, font offline (Lora + Plus Jakarta Sans), Chart.js lokal
-- **Session**: express-session + bcryptjs
+- **Node.js versi 22.5 atau lebih baru** (memakai SQLite bawaan `node:sqlite`, tidak perlu install database/driver tambahan)
+- Tidak perlu Python, tidak perlu compiler, tidak perlu install apa-apa lagi.
 
-## 🚀 Cara Menjalankan
+## Cara Menjalankan
 
-### Prasyarat
-- **Node.js 22.5 atau lebih baru** (mendukung `node:sqlite` & FTS5) → unduh gratis di [nodejs.org](https://nodejs.org)
-
-### Linux / macOS / Terminal
+### 1. Buka folder proyek lalu install dependency (sekali saja):
 ```bash
-cd arsip-bpn
-npm install      # sekali saja
-npm start        # buka http://localhost:3000
+npm install
 ```
 
-Database + akun default dibuat otomatis saat pertama kali dijalankan.
+### 2. Inisialisasi database (sekali saja):
+```bash
+npm run init-db
+```
 
-### Windows (klik dua kali)
-1. Install Node.js dari [nodejs.org](https://nodejs.org)
-2. **Klik dua kali `start.bat`** (menjalankan `npm install` bila perlu, lalu memulai server)
-3. Buka **http://localhost:3000**
+### 3. (Opsional) Tambah data contoh:
+```bash
+npm run seed
+```
 
-> Jalankan `npm run seed` untuk mengisi 8 arsip contoh (opsional). Hapus `data/arsip-bpn.db` untuk memulai dari nol.
+### 4. Jalankan server:
+```bash
+npm start
+```
 
-### Akun Default
+Lalu buka browser ke: **http://localhost:3000**
 
-| Role | Username | Password |
-|------|----------|----------|
-| Admin | `admin` | `admin123` |
-| Staf | `staff1` | `password123` |
-| Kepala | `kepala1` | `password123` |
+> Untuk stop server: tekan `Ctrl+C` di terminal.
+> Atau jalankan via **klik dua kali `start.bat`** (Windows).
 
-> ⚠️ **Ubah password setelah pemasangan** (menu profil → Ganti Password / Profil Saya).
+## Akun Default
 
-## 🖨️ Isi Dokumen: Cara Mengaktifkan (OCR, 3 Langkah)
+| Username | Password    | Role        |
+|----------|-------------|-------------|
+| admin    | password123 | Administrator |
+| staff1   | password123 | Staf        |
+| kepala1  | password123 | Kepala      |
 
-1. Buka menu **Arsip Dokumen** → cari arsipnya → klik tombol **folder/scan** pada baris.
-2. Di jendela *Scan / OCR*: klik **"Pakai lampiran"** (untuk file PDF/gambar arsip) atau **"Upload gambar/PDF"**.
-3. Tunggu dan otomatis isi dokumen terbaca (bisa diedit dulu). Klik **Simpan Hasil OCR**.
+> **PENTING:** Ganti password segera setelah pertama kali login (menu nama pengguna di pojok kanan atas → Ganti Password).
 
-Setelah itu cari isinya lewat menu **Cari Isi Dokumen**. Pemindaian **berjalan di browser Anda** menggunakan Tesseract.js + PDF.js yang sudah disatukan dalam proyek — **tanpa internet, tanpa layanan berbayar**.
+## Hak Akses
 
-## 🗄️ Mengelola Database (Khusus Admin)
+| Aksi                       | Admin | Staf | Kepala |
+|----------------------------|:-----:|:----:|:------:|
+| Kelola arsip & impor CSV   | ✔     | ✔    | ✔      |
+| Disposisi & peminjaman     | ✔     | ✔    | ✔      |
+| Buku agenda & kalender     | ✔     | ✔    | ✔      |
+| Laporan & ekspor           | ✔     | ✔    | ✔      |
+| Kelola master data         | ✔     | ✔    | –      |
+| Ubah profil kantor/settings| ✔     | –    | –      |
+| Backup JSON                | ✔     | –    | –      |
+| Kelola kategori            | ✔     | –    | –      |
+| Kelola pengguna            | ✔     | –    | –      |
+| Hapus permanen / restore   | ✔     | –    | –      |
 
-Menu **Database & Cadangan** menyediakan:
-
-- **Penjelajah Data** — buka tabel apa pun, tambah/ubah/hapus baris. Tabel inti (arsip, users, pengaturan, log, dll.) dikunci demi keamanan.
-- **Struktur** — lihat definisi `CREATE TABLE`, indeks, foreign key, dan trigger.
-- **Konsol SQL** — mode *Baca (SELECT)* / *Tulis (INSERT, UPDATE, DELETE)* / *DDL (CREATE, ALTER, DROP)*. Perubahan struktur otomatis dicadangkan dulu sebelum dieksekusi; tabel inti otomatis ditolak.
-- **Cadangan** — otomatis setiap 24 jam & sebelum DDL (maks. 10 disimpan), plus tombol manual, unduh salinan `.db`.
-- **Pulihkan (Restore)** — unggah `*.json` (digabung otomatis) atau `*.db` / `*.sql` (disimpan untuk diterapkan saat app dimatikan).
-- **Cek Integritas & Vacuum** — pastikan database sehat dan ringkas.
-
-> Tabel sistem / core tidak bisa diubah lewat penjelajah; gunakan menu resminya. Konsol SQL hanya untuk admin dan seluruhnya dicatat.
-
-## 🔧 Konfigurasi
-
-| Variable | Deskripsi |
-|----------|-----------|
-| `PORT` | Port server (default: `3000`) |
-
-## 📁 Struktur Project
+## Struktur Folder
 
 ```
-arsip-bpn/
-├── start.bat            # Jalankan di Windows (klik dua kali)
+bpn-arsip/
+├── public/               # Frontend (HTML, CSS, JS, font lokal)
+│   └── fonts/            # Font offline (Lora, Plus Jakarta Sans)
 ├── src/
-│   ├── server.js        # Entry point server (booting skema → auto-backup 24 jam)
-│   ├── db/              # Koneksi, skema + trigger FTS5, query, manajemen DB, seed
-│   └── routes/          # API REST (auth, arsip, OCR, search, /api/db, users)
-├── public/
-│   ├── index.html       # SPA shell
-│   ├── css/ style.css   # Tampilan
-│   ├── js/ app.js, views.js, api.js, ui.js, extra.js (OCR, cari, DB manager)
-│   ├── fonts/           # Font offline (Lora, Plus Jakarta Sans)
-│   └── vendor/          # Semua library lokal: tesseract (wasm + bahasa ind/eng), pdfjs, chart.js, fa
-├── data/                # Database + upload + backup (dibuat otomatis, tidak di-git)
-│   ├── arsip-bpn.db
-│   ├── uploads/
-│   ├── backups/         # Cadangan otomatis & manual (.db)
-│   └── .session-secret
-└── static-site/         # Demo statis lama (GitHub Pages) — dibiarkan
+│   ├── server.js         # Entry server
+│   ├── routes/api.js     # Endpoint API
+│   └── db/
+│       ├── init.js       # Buat tabel & data awal
+│       ├── migrate.js    # Migrasi database lama
+│       ├── seed.js       # Data contoh
+│       └── queries.js    # Query database (prepared statements)
+└── data/                 # Data lokal (dibuat otomatis)
+    ├── arsip.db          # File database SQLite
+    ├── uploads/          # File lampiran
+    └── .session-secret   # Kunci sesi (dibuat otomatis)
 ```
 
-## 📌 Catatan Penting
+## Backup Data
 
-- **Zero cost & offline** — semua library disertakan di `public/vendor/`; OCR tetap jalan tanpa internet
-- **OCR aman** — dokumen tidak pernah dikirim ke server/layanan luar; diproses di browser pengguna
-- **File upload** tersimpan di `data/uploads/` — sertakan folder `data/` saat backup manual (folder `data/backups/` juga berisi cadangan `.db`)
-- **Backup database** — otomatis 24 jam; atau menu *Database & Cadangan* / *Laporan & Ekspor*
-- **Untuk LAN kantor**: jalankan di satu PC server, kemudian akses dari PC lain via alamat IP LAN PC tersebut (contoh `http://192.168.1.10:3000`)
-- Versi demo statis lama tetap tersedia online di **https://dinothezero.github.io/Arsip-BPN/** (menyimpan data di LocalStorage browser) — bukan untuk data resmi kantor
+Cukup **copy folder `data/`** ke tempat lain. Semua data arsip + lampiran ada di sana.
+Atau gunakan menu **Profil Kantor → Unduh Backup JSON** untuk cadangan database lengkap (arsip, pengguna, disposisi, peminjaman, agenda, dan log) dalam satu berkas.
 
----
-Dibuat untuk kebutuhan Kantor Pertanahan 😊
+## Keamanan
+
+- Password di-hash dengan **bcrypt** (tidak pernah disimpan plaintext).
+- Sesi dilindungi cookie `httpOnly` + secret acak persisten.
+- Semua keluaran HTML di-escape (anti XSS).
+- Header keamanan dasar (CSP, X-Content-Type-Options, dll) aktif.
+- Aplikasi hanya berjalan di mesin lokal (`localhost`), tidak ada akses dari luar jaringan.
+
+## Lisensi
+
+Dibuat 100% lokal, tanpa biaya. Bebas dipakai/diubah.
