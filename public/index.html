@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Arsip — Kantor Pertanahan</title>
   <meta name="description" content="Sistem Pengelolaan Arsip Digital Kantor Pertanahan — Dokumentasi, Disposisi, Peminjaman, dan Laporan">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -508,6 +508,12 @@
 </div>
 
 <div id="toastContainer" class="toast-container"></div>
-<script src="/app.js"></script>
+<!-- Backend tiruan untuk GitHub Pages (aktif otomatis saat STATIC_MODE) -->
+<script src="mock-api.js"></script>
+<!-- Library QR & Excel (via CDN). Jika gagal dimuat, QR memakai fallback SVG
+     dan ekspor Excel otomatis jatuh ke CSV. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -2,12 +2,12 @@
    SISTEM ARSIP — KANTOR PERTANAHAN
    Desain: Hibrida Pemerintah Modern (hijau toska BPN)
    ============================================================ */
-@font-face{font-family:'Lora';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/Lora-500.ttf') format('truetype')}
-@font-face{font-family:'Lora';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/Lora-600.ttf') format('truetype')}
-@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/PJS-400.ttf') format('truetype')}
-@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/PJS-500.ttf') format('truetype')}
-@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/PJS-600.ttf') format('truetype')}
-@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/PJS-700.ttf') format('truetype')}
+@font-face{font-family:'Lora';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/Lora-500.ttf') format('truetype')}
+@font-face{font-family:'Lora';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Lora-600.ttf') format('truetype')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/PJS-400.ttf') format('truetype')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/PJS-500.ttf') format('truetype')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/PJS-600.ttf') format('truetype')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/PJS-700.ttf') format('truetype')}
 :root{
   --green-950:#06251d;
   --green-900:#0b3b2e;
