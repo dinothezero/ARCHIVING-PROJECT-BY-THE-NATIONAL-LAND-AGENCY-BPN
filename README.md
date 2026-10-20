@@ -75,6 +75,36 @@ Lalu buka browser ke: **http://localhost:3000**
 | `npm run migrate`| Migrasi database lama                         |
 | `npm run setup`  | init-db + migrate (setup lengkap)             |
 
+## Menjalankan di GitHub Pages (Online)
+
+Selain dijalankan lokal, aplikasi ini juga bisa dipublikasikan ke **GitHub Pages**
+sebagai situs statis. Karena GitHub Pages tidak bisa menjalankan server Node.js,
+aplikasi otomatis beralih ke **backend tiruan di sisi browser** (`public/mock-api.js`)
+saat dijalankan di luar `localhost`.
+
+**Cara mengaktifkan:**
+
+1. Pastikan seluruh perubahan sudah di-push ke branch `main`.
+2. Buka **Settings → Pages** pada repository, lalu pada **Source** pilih
+   **GitHub Actions**.
+3. Workflow `.github/workflows/deploy.yml` akan otomatis mempublikasikan folder
+   `public/` setiap ada push ke `main`.
+4. Setelah workflow selesai, situs dapat diakses di
+   `https://<username>.github.io/<nama-repo>/`.
+
+**Catatan penting mode GitHub Pages:**
+
+- Data disimpan **di browser masing-masing pengguna** (localStorage untuk data,
+  IndexedDB untuk lampiran). Data **tidak dibagikan** antar-pengguna/perangkat,
+  dan akan hilang bila cache browser dibersihkan. Gunakan tombol
+  **Unduh Backup JSON** untuk cadangan.
+- Akun default tetap sama: `admin`, `staff1`, `kepala1` (password `password123`).
+- Library QR & Excel dimuat dari CDN. Bila CDN tidak dapat diakses, QR memakai
+  fallback SVG dan ekspor Excel otomatis jatuh ke CSV.
+- Mode ini terdeteksi otomatis: selama diakses dari `localhost`/`127.0.0.1`
+  aplikasi memakai server Express asli; di tempat lain (mis. GitHub Pages)
+  aplikasi memakai backend tiruan.
+
 ## Akun Default
 
 | Username | Password    | Role        |

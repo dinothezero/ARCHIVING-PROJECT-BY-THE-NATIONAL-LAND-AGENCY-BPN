@@ -27,7 +27,15 @@ const PAGE_META = {
 };
 
 /* ============ API ============ */
+// STATIC_MODE aktif saat halaman dijalankan di hosting statis (GitHub Pages),
+// yaitu ketika hostname bukan localhost/127.0.0.1 (server Express lokal).
+const STATIC_MODE = (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1');
+
 async function api(url, options = {}) {
+  if (STATIC_MODE && window.__mockApi) {
+    try { return await window.__mockApi(url, options); }
+    catch (e) { if (e && e.status === 401) showLogin(); throw e; }
+  }
   const opts = { headers: { 'Content-Type': 'application/json' }, ...options };
   if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
   const res = await fetch(url, opts);
@@ -38,6 +46,16 @@ async function api(url, options = {}) {
   if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan');
   return data;
 }
+
+/* Unduh lampiran / backup — menyesuaikan mode statis maupun server */
+window.downloadLamp = function (id) {
+  if (STATIC_MODE) { window.__mockDownloadLampiran(id); }
+  else { window.open('/api/lampiran/' + id + '/download', '_blank'); }
+};
+window.downloadBackup = function () {
+  if (STATIC_MODE) { window.__mockBackup(); }
+  else { window.open('/api/backup', '_blank'); }
+};
 
 /* ============ HELPERS ============ */
 function esc(s) { if (s === null || s === undefined) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
@@ -421,7 +439,7 @@ window.openDetail=async function(id){
     </div>
     <div class="detail-section"><h4>Disposisi</h4>${disp}</div>
     <div class="detail-section"><h4>Riwayat Peminjaman</h4>${pinj}</div>
-    <div class="detail-section"><h4>Lampiran (${d.lampiran.length})</h4>${d.lampiran.length===0?'<div class="empty-state">Belum ada lampiran</div>':d.lampiran.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="/api/lampiran/${l.id}/download" target="_blank" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLamp(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('')}</div>`;
+    <div class="detail-section"><h4>Lampiran (${d.lampiran.length})</h4>${d.lampiran.length===0?'<div class="empty-state">Belum ada lampiran</div>':d.lampiran.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLamp(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('')}</div>`;
     openModal('modalDetail');
   }catch(e){ toast(e.message,'error'); }
 };
@@ -590,7 +608,8 @@ function buildLaporanLayout(){ const sec=document.getElementById('page-laporan')
   document.getElementById('repExportXlsx').addEventListener('click',exportXlsx);
   const ib=document.getElementById('repImport'); if(ib) ib.addEventListener('click',openImportModal);
 }
-function exportXlsx(){ try{ const dari=document.getElementById('repDari').value||'',sampai=document.getElementById('repSampai').value||'',kategori=document.getElementById('repKategori').value||''; window.open('/api/ekspor/xlsx?dari='+encodeURIComponent(dari)+'&sampai='+encodeURIComponent(sampai)+'&kategori='+encodeURIComponent(kategori),'_blank'); }catch(e){ toast(e.message,'error'); } }
+function exportXlsx(){ try{ const dari=document.getElementById('repDari').value||'',sampai=document.getElementById('repSampai').value||'',kategori=document.getElementById('repKategori').value||'';
+  if(STATIC_MODE){ window.__mockExportXlsx(dari,sampai,kategori); } else { window.open('/api/ekspor/xlsx?dari='+encodeURIComponent(dari)+'&sampai='+encodeURIComponent(sampai)+'&kategori='+encodeURIComponent(kategori),'_blank'); } }catch(e){ toast(e.message,'error'); } }
 async function loadLaporanPage(){ buildLaporanLayout();
   const dari=document.getElementById('repDari').value||'', sampai=document.getElementById('repSampai').value||'', kategori=document.getElementById('repKategori').value||'';
   try{ const d=await api('/api/laporan?dari='+encodeURIComponent(dari)+'&sampai='+encodeURIComponent(sampai)+'&kategori='+encodeURIComponent(kategori));
@@ -603,7 +622,8 @@ async function loadLaporanPage(){ buildLaporanLayout();
     </tbody></table></div></div>`;
   }catch(e){ toast(e.message,'error'); }
 }
-async function exportCsv(){ try{ const dari=document.getElementById('repDari').value||'',sampai=document.getElementById('repSampai').value||'',kategori=document.getElementById('repKategori').value||''; window.open('/api/ekspor/csv?dari='+encodeURIComponent(dari)+'&sampai='+encodeURIComponent(sampai)+'&kategori='+encodeURIComponent(kategori),'_blank'); }catch(e){ toast(e.message,'error'); } }
+async function exportCsv(){ try{ const dari=document.getElementById('repDari').value||'',sampai=document.getElementById('repSampai').value||'',kategori=document.getElementById('repKategori').value||'';
+  if(STATIC_MODE){ window.__mockExportCsv(dari,sampai,kategori); } else { window.open('/api/ekspor/csv?dari='+encodeURIComponent(dari)+'&sampai='+encodeURIComponent(sampai)+'&kategori='+encodeURIComponent(kategori),'_blank'); } }catch(e){ toast(e.message,'error'); } }
 
 /* ============ SAMPAH ============ */
 function buildSampahLayout(){ const sec=document.getElementById('page-sampah'); if(sec.dataset.built)return; sec.dataset.built=1;
@@ -627,14 +647,18 @@ async function loadLogPage(){ try{ const d=await api('/api/log'); const tb=docum
 /* ============ LAMPIRAN ============ */
 window.openLampiran=async function(id){ document.getElementById('lampiranArsipId').value=id; try{ const d=await api('/api/arsip/'+id); renderFileList(d.lampiran); }catch(e){ toast(e.message,'error'); } openModal('modalLampiran'); };
 function renderFileList(files){ const el=document.getElementById('fileList'); if(!files||!files.length){el.innerHTML='';return;} const can=isAdmin();
-  el.innerHTML=files.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="/api/lampiran/${l.id}/download" target="_blank" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLampModal(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join(''); }
+  el.innerHTML=files.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLampModal(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join(''); }
 window.delLampModal=async function(id){ if(!confirm('Hapus lampiran?'))return; try{ await api('/api/lampiran/'+id,{method:'DELETE'}); const aid=document.getElementById('lampiranArsipId').value; const d=await api('/api/arsip/'+aid); renderFileList(d.lampiran); toast('Lampiran dihapus','success'); }catch(e){ toast(e.message,'error'); } };
 const uploadZone=document.getElementById('uploadZone'), fileInput=document.getElementById('fileInput');
 uploadZone.addEventListener('click',()=>fileInput.click()); fileInput.addEventListener('change',()=>uploadFiles(fileInput.files));
 uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover');}); uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
 uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);});
-async function uploadFiles(files){ const aid=document.getElementById('lampiranArsipId').value; if(!aid)return; const fd=new FormData(); for(const f of files)fd.append('files',f);
-  const r=await fetch('/api/arsip/'+aid+'/lampiran',{method:'POST',body:fd}); const d=await r.json(); if(!r.ok)throw new Error(d.error||'Gagal'); toast(d.files.length+' file diupload','success'); fileInput.value=''; const up=await api('/api/arsip/'+aid); renderFileList(up.lampiran); }
+async function uploadFiles(files){ const aid=document.getElementById('lampiranArsipId').value; if(!aid)return;
+  let d;
+  if(STATIC_MODE){ d = await window.__mockUploadLampiran(aid, files); }
+  else { const fd=new FormData(); for(const f of files)fd.append('files',f);
+    const r=await fetch('/api/arsip/'+aid+'/lampiran',{method:'POST',body:fd}); d=await r.json(); if(!r.ok)throw new Error(d.error||'Gagal'); }
+  toast(d.files.length+' file diupload','success'); fileInput.value=''; const up=await api('/api/arsip/'+aid); renderFileList(up.lampiran); }
 
 /* ============ QR ============ */
 window.showQr=async function(id){ try{ const d=await api('/api/arsip/'+id+'/qr'); document.getElementById('qrImage').innerHTML=`<img src="${d.dataUrl}" alt="QR">`; document.getElementById('qrNomor').textContent=d.nomor_arsip; openModal('modalQr'); }catch(e){ toast(e.message,'error'); } };
@@ -680,7 +704,7 @@ async function loadProfilPage(){
     </div>`;
     observeReveals(sec);
     const eb=document.getElementById('btnEditProfil'); if(eb) eb.onclick=openProfilEdit;
-    const bb=document.getElementById('btnBackup'); if(bb) bb.onclick=()=>window.open('/api/backup','_blank');
+    const bb=document.getElementById('btnBackup'); if(bb) bb.onclick=()=>downloadBackup();
   }catch(e){ toast(e.message,'error'); }
 }
 function openProfilEdit(){
@@ -707,9 +731,11 @@ document.getElementById('csvInput').addEventListener('change',()=>{ const f=docu
 document.getElementById('btnImportSubmit').addEventListener('click',async()=>{ const inp=document.getElementById('csvInput'); if(!inp.files.length){ toast('Pilih file CSV dulu','error'); return; }
   const btn=document.getElementById('btnImportSubmit'); const old=btn.textContent; btn.textContent='Memproses...'; btn.disabled=true;
   try{
-    const fd=new FormData(); fd.append('file',inp.files[0]);
-    const res=await fetch('/api/import/arsip',{method:'POST',body:fd}); const d=await res.json();
-    if(!res.ok){ toast(d.error||'Import gagal','error'); return; }
+    let d;
+    if(STATIC_MODE){ try{ d = await window.__mockImport(inp.files[0]); }catch(e){ toast(e.message||'Import gagal','error'); return; } }
+    else { const fd=new FormData(); fd.append('file',inp.files[0]);
+      const res=await fetch('/api/import/arsip',{method:'POST',body:fd}); d=await res.json();
+      if(!res.ok){ toast(d.error||'Import gagal','error'); return; } }
     document.getElementById('importResult').innerHTML=`<div class="imp-sum"><div><strong class="ok">${d.masuk}</strong><span>Berhasil</span></div><div><strong class="bad">${d.gagal}</strong><span>Gagal</span></div><div><strong>${(d.masuk||0)+(d.gagal||0)}</strong><span>Total</span></div></div>`+(d.eror&&d.eror.length?`<div class="imp-errors">${d.eror.map(er=>`<div class="imp-err">${esc(er)}</div>`).join('')}</div>`:'');
     toast(d.masuk>0?('Import selesai: '+d.masuk+' berhasil'):'Tidak ada data berhasil diimpor', d.masuk>0?'success':'info');
     loadArsip();
