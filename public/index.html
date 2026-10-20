@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Arsip — Kantor Pertanahan</title>
+  <meta name="description" content="Sistem Pengelolaan Arsip Digital Kantor Pertanahan — Dokumentasi, Disposisi, Peminjaman, dan Laporan">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ============ SPLASH / PEMUATAN ============ -->
+<div id="splashScreen" class="splash">
+  <div class="splash-card">
+    <div class="splash-emblem">
+      <svg viewBox="0 0 64 64" width="72" height="72" fill="none"><rect x="2" y="2" width="60" height="60" rx="14" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.4)"/><g fill="#fff"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+    </div>
+    <h1 class="splash-title">Sistem Arsip</h1>
+    <p class="splash-sub">Kantor Pertanahan</p>
+    <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginPage" class="login-wrap">
+  <div class="login-brand-panel">
+    <div class="login-orbit orbit-1"></div>
+    <div class="login-orbit orbit-2"></div>
+    <div class="login-orbit orbit-3"></div>
+    <div class="brand-emblem pop-in">
+      <svg viewBox="0 0 64 64" width="84" height="84" fill="none">
+        <rect x="2" y="2" width="60" height="60" rx="14" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)"/>
+        <g fill="#fff"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g>
+      </svg>
+    </div>
+    <h1 class="fade-up">Kantor Pertanahan</h1>
+    <p class="brand-sub fade-up-2">Badan Pertanahan Nasional</p>
+    <div class="brand-rule fade-up-2"><span></span></div>
+    <p class="brand-tag fade-up-2">Sistem Pengelolaan Arsip Digital<br>Disposisi · Peminjaman · Dokumentasi · Laporan</p>
+    <div class="brand-footer-meta"><span>Kearsipan &amp; Layanan Pertanahan</span><span id="loginClock" class="login-clock">--:--:--</span></div>
+  </div>
+  <div class="login-form-panel">
+    <div class="login-form-inner slide-up">
+      <div class="login-mobile-logo">
+        <svg viewBox="0 0 64 64" width="54" height="54" fill="none"><rect x="2" y="2" width="60" height="60" rx="14" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+      </div>
+      <h2 class="login-title">Selamat Datang</h2>
+      <p class="login-sub">Masuk untuk mengelola arsip, disposisi, peminjaman, dan laporan dokumen kantor.</p>
+      <form id="loginForm" class="login-form" autocomplete="off">
+        <div class="field">
+          <label for="loginUser">Username</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input type="text" id="loginUser" placeholder="Masukkan username" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="loginPass">Password</label>
+          <div class="input-wrap">
+            <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="loginPass" placeholder="Masukkan password" required>
+          </div>
+        </div>
+        <div id="loginError" class="error-msg shake" style="display:none"></div>
+        <button type="submit" class="btn-login">Masuk <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="appPage" class="app-shell" style="display:none">
+
+  <!-- TOP BAR -->
+  <header class="app-topbar">
+    <button id="menuToggle" class="icon-btn topbar-menu">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-brand">
+      <div class="topbar-emblem">
+        <svg viewBox="0 0 64 64" width="40" height="40" fill="none"><rect x="2" y="2" width="60" height="60" rx="13" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+      </div>
+      <div class="topbar-brand-text"><strong>Kantor Pertanahan</strong><span>Badan Pertanahan Nasional</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="top-clock" id="topClock"><span class="tc-time">--:--:--</span><span class="tc-date">-</span></div>
+      <div class="notif-wrap">
+        <button id="btnNotif" class="icon-btn" title="Notifikasi">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notifBadge" class="notif-badge" style="display:none">0</span>
+        </button>
+        <div id="notifDropdown" class="notif-dropdown" style="display:none">
+          <div class="notif-head"><strong>Notifikasi</strong><button id="btnMarkReadAll" class="link-btn">Tandai terbaca</button></div>
+          <div id="notifList" class="notif-list"><div class="notif-empty">Tidak ada notifikasi</div></div>
+        </div>
+      </div>
+      <div class="topbar-user" id="userMenu">
+        <div class="user-avatar" id="userAvatar">A</div>
+        <div class="topbar-user-text"><strong id="userName">-</strong><span id="userRole">-</span></div>
+      </div>
+      <button id="btnLogout" class="icon-btn" title="Keluar">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+    <div id="userDropdown" class="user-dropdown" style="display:none">
+      <div class="ud-head"><strong id="udName">-</strong><span id="udRole">-</span></div>
+      <button id="btnGantiPass" class="ud-item">Ganti Password</button>
+    </div>
+  </header>
+  <div class="gov-stripe"><span class="st-gold"></span><span class="st-green"></span><span class="st-teal"></span></div>
+
+  <div class="app-body">
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="sidebar">
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Menu Utama</div>
+        <a href="#" class="nav-item active" data-page="dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-page="arsip">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+          <span>Data Arsip</span>
+        </a>
+        <a href="#" class="nav-item" data-page="buku-agenda">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="16" y2="7"/><line x1="9" y1="11" x2="16" y2="11"/></svg>
+          <span>Buku Agenda</span>
+        </a>
+        <a href="#" class="nav-item" data-page="disposisi">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Disposisi</span>
+        </a>
+        <a href="#" class="nav-item" data-page="peminjaman">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Peminjaman</span>
+        </a>
+        <a href="#" class="nav-item" data-page="kalender">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Kalender</span>
+        </a>
+        <div class="nav-section-label nav-sec-2">Pengaturan &amp; Admin</div>
+        <a href="#" class="nav-item" data-page="kategori">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>Kategori</span>
+        </a>
+        <a href="#" class="nav-item" data-page="master">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Data Master</span>
+        </a>
+        <a href="#" class="nav-item nav-admin" data-page="users">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Pengguna</span>
+        </a>
+        <a href="#" class="nav-item nav-admin" data-page="log">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>Log Aktivitas</span>
+        </a>
+        <div class="nav-section-label nav-sec-2">Lainnya</div>
+        <a href="#" class="nav-item" data-page="laporan">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+          <span>Laporan &amp; Ekspor</span>
+        </a>
+        <a href="#" class="nav-item" data-page="sampah">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <span>Tempat Sampah</span>
+        </a>
+        <a href="#" class="nav-item" data-page="profil">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01"/></svg>
+          <span>Profil Kantor</span>
+        </a>
+      </nav>
+      <div class="sidebar-foot-note"><span class="foot-dot"></span><span id="footNote">Data tersimpan lokal &amp; aman</span></div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <div class="page-head reveal">
+        <div><h2 class="page-title" id="pageTitle">Dashboard</h2><p class="page-sub" id="pageSub">Ringkasan data arsip kantor Anda</p></div>
+        <div class="page-head-action" id="pageHeadAction"></div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <section id="page-dashboard" class="page active"></section>
+      <!-- ARSIP -->
+      <section id="page-arsip" class="page" style="display:none"></section>
+      <!-- BUKU AGENDA -->
+      <section id="page-buku-agenda" class="page" style="display:none"></section>
+      <!-- DISPOSISI -->
+      <section id="page-disposisi" class="page" style="display:none"></section>
+      <!-- PEMINJAMAN -->
+      <section id="page-peminjaman" class="page" style="display:none"></section>
+      <!-- KALENDER -->
+      <section id="page-kalender" class="page" style="display:none"></section>
+      <!-- KATEGORI -->
+      <section id="page-kategori" class="page" style="display:none"></section>
+      <!-- MASTER -->
+      <section id="page-master" class="page" style="display:none"></section>
+      <!-- USERS -->
+      <section id="page-users" class="page" style="display:none"></section>
+      <!-- LOG -->
+      <section id="page-log" class="page" style="display:none"></section>
+      <!-- LAPORAN -->
+      <section id="page-laporan" class="page" style="display:none"></section>
+      <!-- SAMPAH -->
+      <section id="page-sampah" class="page" style="display:none"></section>
+      <!-- PROFIL -->
+      <section id="page-profil" class="page" style="display:none"></section>
+
+      <footer class="app-footer">
+        <div class="footer-brand">
+          <div class="footer-emblem">
+            <svg viewBox="0 0 64 64" width="30" height="30" fill="none"><rect x="2" y="2" width="60" height="60" rx="12" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+          </div>
+          <div><strong id="footBrand">Kantor Pertanahan — Badan Pertanahan Nasional</strong><span>Sistem Pengelolaan Arsip Digital</span></div>
+        </div>
+        <div class="footer-copy"><span id="footerYear"></span> Kantor Pertanahan. Seluruh hak cipta dilindungi.</div>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL ARSIP -->
+<div id="modalArsip" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-lg">
+    <div class="modal-head"><h3 id="modalArsipTitle">Tambah Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <form id="formArsip">
+        <input type="hidden" id="arsipId">
+        <div class="form-row">
+          <div class="field"><label>Kategori <span class="req">*</span></label><select id="arsipKategori" class="ctl" required></select></div>
+          <div class="field"><label>Status</label>
+            <select id="arsipStatus" class="ctl"><option value="aktif">Aktif</option><option value="arsip">Diarsipkan</option><option value="dipinjam">Dipinjam</option><option value="hilang">Hilang</option><option value="rusak">Rusak</option></select>
+          </div>
+        </div>
+        <div class="field"><label>Judul <span class="req">*</span></label><input type="text" id="arsipJudul" class="ctl" required placeholder="Judul arsip"></div>
+        <div class="form-row">
+          <div class="field"><label>Nomor Surat</label><input type="text" id="arsipNomorSurat" class="ctl" placeholder="Nomor surat"></div>
+          <div class="field"><label>Tanggal Surat</label><input type="date" id="arsipTanggalSurat" class="ctl"></div>
+          <div class="field"><label>Tanggal Arsip <span class="req">*</span></label><input type="date" id="arsipTanggalArsip" class="ctl" required></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Pengirim</label><input type="text" id="arsipPengirim" class="ctl" placeholder="Pengirim"></div>
+          <div class="field"><label>Instansi</label><select id="arsipInstansi" class="ctl"></select></div>
+          <div class="field"><label>Penerima</label><input type="text" id="arsipPenerima" class="ctl" placeholder="Penerima"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Unit/Bidang</label><select id="arsipUnit" class="ctl"></select></div>
+          <div class="field"><label>Lokasi Fisik</label><select id="arsipLokasiSel" class="ctl"></select></div>
+          <div class="field"><label>Keterangan Lokasi</label><input type="text" id="arsipLokasi" class="ctl" placeholder="Rak / lemari / baris"></div>
+        </div>
+        <div class="field"><label>Perihal</label><input type="text" id="arsipPerihal" class="ctl" placeholder="Perihal"></div>
+        <div class="field"><label>Ringkasan</label><textarea id="arsipRingkasan" class="ctl" rows="3" placeholder="Ringkasan isi arsip"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanArsip" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL IMPORT CSV -->
+<div id="modalImport" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3>Import Arsip dari CSV/Excel</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <div class="upload-zone" id="importZone">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>Pilih atau seret file <b>.csv</b> di sini</p>
+        <small>Format header: kategori, judul, nomor_surat, tanggal_surat, tanggal_arsip, pengirim, penerima, perihal, ringkasan, status, lokasi_fisik</small>
+        <button id="btnPilihCsv" class="btn btn-ghost btn-sm" style="margin-top:10px">Pilih File CSV</button>
+        <span id="csvFileName" class="csv-file-name"></span>
+        <input type="file" id="csvInput" accept=".csv,text/csv" style="display:none">
+      </div>
+      <div id="importResult" class="import-result"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnImportSubmit" class="btn btn-primary">Mulai Import</button></div>
+  </div>
+</div>
+
+<!-- MODAL LAMPIRAN -->
+<div id="modalLampiran" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3>Lampiran Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="lampiranArsipId">
+      <div class="upload-zone" id="uploadZone">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>Seret file ke sini atau <label for="fileInput" class="upload-link">pilih file</label></p>
+        <small>PDF, JPG, PNG, DOC, DOCX, XLS, TXT — maks 50MB</small>
+        <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.txt" style="display:none">
+      </div>
+      <div id="fileList" class="file-list"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Tutup</button></div>
+  </div>
+</div>
+
+<!-- MODAL QR -->
+<div id="modalQr" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3>Barcode / QR Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body qr-body">
+      <div id="qrImage" class="qr-img"></div>
+      <p id="qrNomor" class="qr-no"></p>
+      <button id="btnPrintQr" class="btn btn-ghost btn-full">Cetak QR</button>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Tutup</button></div>
+  </div>
+</div>
+
+<!-- MODAL DISPOSISI -->
+<div id="modalDisposisi" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3>Disposisi Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="dispArsipId">
+      <input type="hidden" id="dispId">
+      <div class="disp-arsip-info" id="dispArsipInfo"></div>
+      <div class="field"><label>Disposisi Ke</label><select id="dispKepada" class="ctl"></select></div>
+      <div class="field"><label>Instruksi</label><textarea id="dispInstruksi" class="ctl" rows="3" placeholder="Instruksi / arahan"></textarea></div>
+      <div class="form-row">
+        <div class="field"><label>Tanggal</label><input type="date" id="dispTanggal" class="ctl"></div>
+        <div class="field"><label>Status</label>
+          <select id="dispStatus" class="ctl"><option value="proses">Proses</option><option value="diterima">Diterima</option><option value="selesai">Selesai</option><option value="ditolak">Ditolak</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Catatan</label><textarea id="dispCatatan" class="ctl" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanDisposisi" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL PEMINJAMAN -->
+<div id="modalPeminjaman" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3>Peminjaman Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="pinjamArsipId">
+      <div class="disp-arsip-info" id="pinjamArsipInfo"></div>
+      <div class="form-row">
+        <div class="field"><label>Nama Peminjam <span class="req">*</span></label><input type="text" id="pinjamNama" class="ctl" required></div>
+        <div class="field"><label>Unit Peminjam</label><select id="pinjamUnit" class="ctl"></select></div>
+      </div>
+      <div class="field"><label>Alasan</label><textarea id="pinjamAlasan" class="ctl" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="field"><label>Tanggal Pinjam</label><input type="date" id="pinjamTglPinjam" class="ctl"></div>
+        <div class="field"><label>Jatuh Tempo</label><input type="date" id="pinjamTglTempo" class="ctl"></div>
+      </div>
+      <div class="field"><label>Catatan</label><textarea id="pinjamCatatan" class="ctl" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanPeminjaman" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL KATEGORI -->
+<div id="modalKategori" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3 id="modalKategoriTitle">Tambah Kategori</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <form id="formKategori">
+        <input type="hidden" id="kategoriId">
+        <div class="field"><label>Kode <span class="req">*</span></label><input type="text" id="kategoriKode" class="ctl" required placeholder="Contoh: SKD" maxlength="10"></div>
+        <div class="field"><label>Nama <span class="req">*</span></label><input type="text" id="kategoriNama" class="ctl" required placeholder="Nama kategori"></div>
+        <div class="field"><label>Deskripsi</label><textarea id="kategoriDeskripsi" class="ctl" rows="2"></textarea></div>
+      </form>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanKategori" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL MASTER DATA -->
+<div id="modalMaster" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3 id="masterTitle">Tambah</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="masterId">
+      <input type="hidden" id="masterType">
+      <div id="masterFields"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanMaster" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL USER -->
+<div id="modalUser" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3 id="userTitle">Tambah Pengguna</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="userId">
+      <div class="field"><label>Username</label><input type="text" id="uUsername" class="ctl" placeholder="Username"></div>
+      <div class="field"><label>Nama Lengkap</label><input type="text" id="uNama" class="ctl" placeholder="Nama lengkap"></div>
+      <div class="field"><label>Role</label>
+        <select id="uRole" class="ctl"><option value="staff">Staf</option><option value="admin">Administrator</option><option value="kepala">Kepala</option></select>
+      </div>
+      <div class="field" id="uPassField"><label>Password <span class="req">*</span></label><input type="password" id="uPassword" class="ctl" placeholder="Minimal 6 karakter"></div>
+      <div class="field" id="uAktifField" style="display:none">
+        <label>Status</label><select id="uAktif" class="ctl"><option value="1">Aktif</option><option value="0">Nonaktif</option></select>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanUser" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL DETAIL -->
+<div id="modalDetail" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-lg">
+    <div class="modal-head"><h3>Detail Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body" id="detailContent"></div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Tutup</button></div>
+  </div>
+</div>
+
+<!-- MODAL GANTI PASSWORD -->
+<div id="modalGantiPass" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3>Ganti Password</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Password Lama</label><input type="password" id="gpLama" class="ctl"></div>
+      <div class="field"><label>Password Baru</label><input type="password" id="gpBaru" class="ctl"></div>
+      <div class="field"><label>Ulangi Password Baru</label><input type="password" id="gpUlangi" class="ctl"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnGantiPassSubmit" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL BUKU AGENDA -->
+<div id="modalBukuAgenda" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3 id="agendaModalTitle">Catat Agenda</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="bgId">
+      <div class="form-row">
+        <div class="field"><label>Jenis</label><select id="bgJenis" class="ctl"><option value="masuk">Surat Masuk</option><option value="keluar">Surat Keluar</option></select></div>
+        <div class="field"><label>Tahun</label><select id="bgTahun" class="ctl"></select></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Tanggal <span class="req">*</span></label><input type="date" id="bgTanggal" class="ctl" required></div>
+        <div class="field"><label>Nomor Surat</label><input type="text" id="bgNomor" class="ctl" placeholder="Nomor surat (opsional)"></div>
+      </div>
+      <div class="field"><label>Asal / Tujuan</label><input type="text" id="bgAsalTujuan" class="ctl" placeholder="Instansi / pihak pengirim-penerima"></div>
+      <div class="field"><label>Perihal <span class="req">*</span></label><input type="text" id="bgPerihal" class="ctl" required placeholder="Perihal surat"></div>
+      <div class="field"><label>Keterangan</label><textarea id="bgKet" class="ctl" rows="2"></textarea></div>
+      <div class="field"><label>Hubungkan ke Arsip (opsional)</label><select id="bgArsip" class="ctl"></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanBukuAgenda" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL AGENDA KEGIATAN -->
+<div id="modalKegiatan" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel">
+    <div class="modal-head"><h3 id="kegiatanModalTitle">Tambah Kegiatan</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="kgId">
+      <div class="field"><label>Judul Kegiatan <span class="req">*</span></label><input type="text" id="kgJudul" class="ctl" required placeholder="Nama kegiatan / rapat"></div>
+      <div class="form-row">
+        <div class="field"><label>Tanggal <span class="req">*</span></label><input type="date" id="kgTanggal" class="ctl" required></div>
+        <div class="field"><label>Tipe</label><select id="kgTipe" class="ctl"><option value="rapat">Rapat</option><option value="kegiatan">Kegiatan</option><option value="verifikasi">Verifikasi</option><option value="pelayanan">Pelayanan</option><option value="sosialisasi">Sosialisasi</option><option value="lainnya">Lainnya</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Jam Mulai</label><input type="time" id="kgJamMulai" class="ctl"></div>
+        <div class="field"><label>Jam Selesai</label><input type="time" id="kgJamSelesai" class="ctl"></div>
+      </div>
+      <div class="field"><label>Lokasi</label><input type="text" id="kgLokasi" class="ctl" placeholder="Ruang / aula"></div>
+      <div class="field"><label>Keterangan</label><textarea id="kgKet" class="ctl" rows="2"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanKegiatan" class="btn btn-primary">Simpan</button></div>
+  </div>
+</div>
+
+<!-- MODAL PROFIL KANTOR -->
+<div id="modalProfil" class="modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-lg">
+    <div class="modal-head"><h3>Profil &amp; Kop Surat</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body profil-form">
+      <div class="form-row">
+        <div class="field"><label>Nama Kantor</label><input type="text" id="setNamaKantor" class="ctl"></div>
+        <div class="field"><label>Sub Nama</label><input type="text" id="setSubNama" class="ctl"></div>
+      </div>
+      <div class="field"><label>Alamat</label><input type="text" id="setAlamat" class="ctl"></div>
+      <div class="form-row">
+        <div class="field"><label>Telepon</label><input type="text" id="setTelepon" class="ctl"></div>
+        <div class="field"><label>Email</label><input type="text" id="setEmail" class="ctl"></div>
+        <div class="field"><label>Website</label><input type="text" id="setWebsite" class="ctl"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Nama Kepala</label><input type="text" id="setKepalaNama" class="ctl"></div>
+        <div class="field"><label>NIP Kepala</label><input type="text" id="setKepalaNip" class="ctl"></div>
+        <div class="field"><label>Kota</label><input type="text" id="setKota" class="ctl"></div>
+      </div>
+      <div class="field"><label>Motto</label><input type="text" id="setMotto" class="ctl"></div>
+      <div class="profil-kop-preview" id="profilKopPreview"></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanProfil" class="btn btn-primary">Simpan Profil</button></div>
+  </div>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+<script src="/app.js"></script>
+</body>
+</html>
