@@ -62,7 +62,18 @@ npm start
 Lalu buka browser ke: **http://localhost:3000**
 
 > Untuk stop server: tekan `Ctrl+C` di terminal.
-> Atau jalankan via **klik dua kali `start.bat`** (Windows).
+> Atau jalankan via **klik dua kali `start.bat`** (Windows) atau **`start.ps1`** (PowerShell).
+
+### Perintah npm yang tersedia:
+
+| Perintah         | Keterangan                                    |
+|------------------|-----------------------------------------------|
+| `npm start`      | Jalankan server (production)                  |
+| `npm run dev`    | Jalankan server dengan auto-reload (watch)    |
+| `npm run init-db`| Inisialisasi database (buat tabel & data awal)|
+| `npm run seed`   | Tambah data contoh                            |
+| `npm run migrate`| Migrasi database lama                         |
+| `npm run setup`  | init-db + migrate (setup lengkap)             |
 
 ## Akun Default
 
@@ -94,19 +105,35 @@ Lalu buka browser ke: **http://localhost:3000**
 ```
 bpn-arsip/
 ├── public/               # Frontend (HTML, CSS, JS, font lokal)
+│   ├── index.html        # Halaman utama
+│   ├── app.js            # Logika frontend (SPA)
+│   ├── style.css         # Styling
 │   └── fonts/            # Font offline (Lora, Plus Jakarta Sans)
+│       ├── Lora-500.ttf
+│       ├── Lora-600.ttf
+│       ├── PJS-400.ttf
+│       ├── PJS-500.ttf
+│       ├── PJS-600.ttf
+│       └── PJS-700.ttf
 ├── src/
-│   ├── server.js         # Entry server
-│   ├── routes/api.js     # Endpoint API
+│   ├── server.js         # Entry server (Express)
+│   ├── routes/
+│   │   └── api.js        # Endpoint API
 │   └── db/
 │       ├── init.js       # Buat tabel & data awal
 │       ├── migrate.js    # Migrasi database lama
 │       ├── seed.js       # Data contoh
 │       └── queries.js    # Query database (prepared statements)
-└── data/                 # Data lokal (dibuat otomatis)
-    ├── arsip.db          # File database SQLite
-    ├── uploads/          # File lampiran
-    └── .session-secret   # Kunci sesi (dibuat otomatis)
+├── data/                 # Data lokal (dibuat otomatis)
+│   ├── arsip.db          # File database SQLite
+│   ├── uploads/          # File lampiran
+│   └── .session-secret   # Kunci sesi (dibuat otomatis)
+├── .gitignore            # File/folder yang diabaikan git
+├── package.json          # Dependency & script npm
+├── package-lock.json     # Lock file dependency
+├── start.bat             # Script jalankan (Windows CMD)
+├── start.ps1             # Script jalankan (PowerShell)
+└── README.md             # Dokumentasi proyek
 ```
 
 ## Backup Data
