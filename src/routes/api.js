@@ -39,6 +39,33 @@ const ARSIP_STATUS = ['aktif', 'arsip', 'dipinjam', 'hilang', 'rusak'];
 const DISPOSISI_STATUS = ['proses', 'diterima', 'selesai', 'ditolak'];
 const ROLE_VALID = ['admin', 'staff', 'kepala'];
 
+/* ============ PEMBATAS PERCOBAAN (in-memory) ============ */
+// Cukup untuk instalasi kantor: mencegah tebak-tebakan password beruntun.
+const rateBuckets = new Map();
+function rateNow() { return Date.now(); }
+function rateBucket(key, windowMs) {
+  const now = rateNow();
+  let b = rateBuckets.get(key);
+  if (!b || now > b.reset) { b = { count: 0, reset: now + windowMs }; rateBuckets.set(key, b); }
+  return b;
+}
+function rateCheck(key, max, windowMs) {
+  const b = rateBucket(key, windowMs);
+  return b.count >= max ? { blocked: true, retryAfter: Math.max(1, Math.ceil((b.reset - rateNow()) / 1000)) } : { blocked: false };
+}
+function rateFail(key, windowMs) { rateBucket(key, windowMs).count++; }
+function rateClear(key) { rateBuckets.delete(key); }
+setInterval(() => {
+  const now = rateNow();
+  for (const [k, b] of rateBuckets) if (now > b.reset) rateBuckets.delete(k);
+}, 10 * 60 * 1000).unref();
+function clientIp(req) { return req.ip || (req.socket && req.socket.remoteAddress) || 'unknown'; }
+function readSettings() {
+  const s = {};
+  q.getAllSettings.all().forEach(r => s[r.kunci] = r.nilai);
+  return s;
+}
+
 /* ============ AUTH HELPERS ============ */
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Sesi berakhir, silakan login kembali' });
@@ -81,10 +108,24 @@ function runUpload(mw) {
 /* ============ AUTH ============ */
 router.post('/login', (req, res) => {
   const { username, password } = req.body || {};
-  const user = q.getUserByUsername.get(String(username || '').trim());
-  if (!user || !user.aktif) return res.status(401).json({ error: 'Username/password salah atau akun nonaktif' });
-  if (!bcrypt.compareSync(String(password || ''), user.password_hash)) return res.status(401).json({ error: 'Username/password salah' });
+  const uname = String(username || '').trim();
+  const rlKey = `login:${clientIp(req)}:${uname.toLowerCase()}`;
+  const rl = rateCheck(rlKey, 8, 10 * 60 * 1000);
+  if (rl.blocked) {
+    res.setHeader('Retry-After', rl.retryAfter);
+    return res.status(429).json({ error: `Terlalu banyak percobaan masuk. Coba lagi dalam ${Math.ceil(rl.retryAfter / 60)} menit.` });
+  }
+  const user = q.getUserByUsername.get(uname);
+  if (!user || !user.aktif) {
+    rateFail(rlKey, 10 * 60 * 1000);
+    return res.status(401).json({ error: 'Username/password salah atau akun nonaktif' });
+  }
+  if (!bcrypt.compareSync(String(password || ''), user.password_hash)) {
+    rateFail(rlKey, 10 * 60 * 1000);
+    return res.status(401).json({ error: 'Username/password salah' });
+  }
 
+  rateClear(rlKey);
   q.setLastLogin.run(q.nowIso(), user.id);
   req.session.regenerate(err => {
     if (err) return res.status(500).json({ error: 'Gagal membuat sesi' });
@@ -101,6 +142,35 @@ router.post('/logout', (req, res) => {
 });
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
+});
+
+/* ============ VERIFIKASI QR (PUBLIK) ============ */
+// Dipindai dari label QR tanpa perlu login. Hanya menampilkan metadata aman.
+router.get('/verify/:kode', (req, res) => {
+  const rl = rateCheck(`verify:${clientIp(req)}`, 60, 60 * 1000);
+  if (rl.blocked) {
+    res.setHeader('Retry-After', rl.retryAfter);
+    return res.status(429).json({ error: 'Terlalu banyak permintaan verifikasi. Coba beberapa saat lagi.' });
+  }
+  const kode = String(req.params.kode || '').trim();
+  if (!kode) return res.status(400).json({ error: 'Kode verifikasi kosong' });
+  const a = q.getArsipByKodeQr.get(kode) || q.getArsipByNomor.get(kode);
+  if (!a) return res.status(404).json({ error: 'Arsip tidak ditemukan atau sudah dihapus' });
+  const s = readSettings();
+  res.json({
+    verified: true,
+    arsip: {
+      nomor_arsip: a.nomor_arsip,
+      judul: a.judul,
+      kategori_kode: a.kategori_kode,
+      kategori_nama: a.kategori_nama,
+      tanggal_arsip: a.tanggal_arsip,
+      status: a.status,
+      lokasi_nama: a.lokasi_nama,
+      instansi_nama: a.instansi_nama
+    },
+    kantor: { nama_kantor: s.nama_kantor || 'Kantor Pertanahan', sub_nama: s.sub_nama || 'Badan Pertanahan Nasional' }
+  });
 });
 
 /* ============ PROFIL / GANTI PASSWORD ============ */
@@ -345,8 +415,11 @@ router.get('/arsip/:id/qr', requireAuth, async (req, res) => {
   const a = q.getArsipById.get(req.params.id);
   if (!a) return res.status(404).json({ error: 'Tidak ditemukan' });
   try {
-    const dataUrl = await qrcode.toDataURL(a.kode_qr || a.nomor_arsip, { width: 220, margin: 1 });
-    res.json({ dataUrl, nomor_arsip: a.nomor_arsip });
+    const kode = a.kode_qr || a.nomor_arsip;
+    const proto = req.get('x-forwarded-proto') || req.protocol;
+    const verifyUrl = `${proto}://${req.get('host')}/?verify=${encodeURIComponent(kode)}`;
+    const dataUrl = await qrcode.toDataURL(verifyUrl, { width: 220, margin: 1 });
+    res.json({ dataUrl, nomor_arsip: a.nomor_arsip, kode, verify_url: verifyUrl });
   } catch (e) { res.status(500).json({ error: 'Gagal generate QR' }); }
 });
 
@@ -549,6 +622,7 @@ router.get('/dashboard', requireAuth, (req, res) => {
     byStatus: q.getStatsByStatus.all(),
     kegiatanHariIni: q.getAgendaHariIni.all(),
     pinjamanAktif: q.getPeminjamanAktif.all(),
+    disposisiProses: q.getDisposisiProsesCount.get().jumlah,
     disposisiTerbaru: q.getDisposisiTerbaru.all(6),
     arsipTerbaru: q.getArsipTerbaru.all(6),
     aktivitas: q.getRecentAktivitas.all(8),

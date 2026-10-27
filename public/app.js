@@ -8,7 +8,8 @@ const state = {
   bgJenis: 'masuk', bgMap: {},
   kalYear: 0, kalMonth: 0, selectedDay: null,
   settings: null, kegMap: {}, kegMapLoaded: false,
-  notifTimer: null, detailId: null, arsipOptions: null, arsipOptionMap: {}
+  notifTimer: null, detailId: null, arsipOptions: null, arsipOptionMap: {},
+  selectedArsip: new Set(), arsipRows: [], qrVerifyUrl: '', qrNomor: ''
 };
 
 const PAGE_META = {
@@ -67,6 +68,7 @@ window.downloadLamp = function (id) {
   else { window.open('/api/lampiran/' + id + '/download', '_blank'); }
 };
 window.downloadBackup = function () {
+  try { localStorage.setItem('bpnarsip.lastBackup', String(Date.now())); } catch (e) { /* storage penuh / diblokir */ }
   if (STATIC_MODE) { window.__mockBackup(); }
   else { window.open('/api/backup', '_blank'); }
 };
@@ -99,7 +101,14 @@ const ICONS = {
   plus:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   restore:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
   search:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-  bell:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
+  bell:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+  copy:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  warn:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  grid:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
+  bolt:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'
 };
 
 function toast(message, type = 'info', ms = 3200) {
@@ -113,6 +122,73 @@ function formatDate(d) { if (!d) return '-'; const p = String(d).split('-'); if 
 function formatBytes(b) { if (!b) return '-'; if (b < 1024) return b+' B'; if (b < 1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 function formatDateTime(dt) { if (!dt) return '-'; const d = parseServerDate(dt); if (isNaN(d)) return dt; return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 const STATUS_LABEL = { aktif:'Aktif', arsip:'Arsip', dipinjam:'Dipinjam', hilang:'Hilang', rusak:'Rusak' };
+
+function debounce(fn, ms) {
+  let t = null;
+  return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); };
+}
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return /[",\r\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function downloadTextFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+async function copyText(text, label) {
+  const value = String(text == null ? '' : text);
+  if (!value) { toast('Tidak ada teks untuk disalin', 'info'); return false; }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    toast((label || 'Teks') + ' disalin', 'success', 1800);
+    return true;
+  } catch (e) {
+    toast('Gagal menyalin otomatis. Salin manual: ' + value, 'error', 6000);
+    return false;
+  }
+}
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const a = new Date(todayLocal() + 'T00:00:00');
+  const b = new Date(String(dateStr).slice(0, 10) + 'T00:00:00');
+  if (isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+function userStorageKey(prefix) {
+  return prefix + '.' + ((state.currentUser && state.currentUser.username) || 'anon');
+}
+function verifyUrlFor(a) {
+  if (a && a.verify_url) return a.verify_url;
+  const kode = (a && (a.kode_qr || a.nomor_arsip)) || '';
+  return location.origin + location.pathname + '?verify=' + encodeURIComponent(kode);
+}
+function rememberRecentArsip(a) {
+  if (!a || !a.id) return;
+  try {
+    const key = userStorageKey('bpnarsip.recentArsip');
+    const list = JSON.parse(localStorage.getItem(key) || '[]').filter(x => x && x.id !== a.id);
+    list.unshift({ id: a.id, nomor_arsip: a.nomor_arsip, judul: a.judul, kategori_kode: a.kategori_kode || '', at: Date.now() });
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 6)));
+  } catch (e) { /* storage tidak tersedia */ }
+}
+function getRecentArsip() {
+  try { return JSON.parse(localStorage.getItem(userStorageKey('bpnarsip.recentArsip')) || '[]').filter(x => x && x.id); }
+  catch (e) { return []; }
+}
 
 /* ============ NAVIGATION ============ */
 function isAdmin(){ return state.currentUser && state.currentUser.role === 'admin'; }
@@ -173,14 +249,17 @@ function showLogin(silent){
   state.currentUser = null;
   state.userList = null; state.arsipOptions = null; state.arsipOptionMap = {};
   state.dispMap = {}; state.userMap = {}; state.detailId = null;
+  state.selectedArsip.clear(); state.arsipRows = [];
   closeUserDropdown(); closeNotifDropdown();
   document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; m.classList.remove('closing','open'); });
   document.body.classList.remove('modal-open', 'print-detail');
+  const vp = document.getElementById('verifyPage'); if (vp) vp.style.display = 'none';
   document.getElementById('loginPage').style.display = 'grid';
   document.getElementById('appPage').style.display = 'none';
   if (!silent) { const el = document.getElementById('loginError'); if (el) el.style.display = 'none'; }
 }
 function showApp(user){
+  const vp = document.getElementById('verifyPage'); if (vp) vp.style.display = 'none';
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appPage').style.display = 'flex';
   state.currentUser = user;
@@ -202,6 +281,12 @@ document.getElementById('loginForm').addEventListener('submit', async e=>{
   if(btn){ btn.disabled=true; btn.classList.add('loading'); }
   try{
     const data = await api('/api/login',{method:'POST',body:{username:document.getElementById('loginUser').value.trim(),password:document.getElementById('loginPass').value}});
+    try{
+      const rem = document.getElementById('rememberUser');
+      const uname = document.getElementById('loginUser').value.trim();
+      if(rem && rem.checked) localStorage.setItem('bpnarsip.rememberUser', uname);
+      else localStorage.removeItem('bpnarsip.rememberUser');
+    }catch(e){}
     document.getElementById('loginPass').value='';
     showApp(data.user); showPage('dashboard');
     toast('Selamat datang, '+data.user.nama+'!','success');
@@ -213,8 +298,57 @@ document.getElementById('loginForm').addEventListener('submit', async e=>{
 document.getElementById('btnLogout').addEventListener('click', async ()=>{
   try{ await api('/api/logout',{method:'POST'}); }catch(e){ /* tetap keluar secara lokal */ }
   showLogin(); toast('Anda telah keluar','info');
-  document.getElementById('loginUser').value=''; document.getElementById('loginPass').value='';
+  document.getElementById('loginPass').value='';
+  try{
+    const remembered = localStorage.getItem('bpnarsip.rememberUser') || '';
+    const rem = document.getElementById('rememberUser');
+    document.getElementById('loginUser').value = remembered;
+    if(rem) rem.checked = !!remembered;
+  }catch(e){ document.getElementById('loginUser').value=''; }
 });
+
+/* ---- Login helpers: toggle password, caps lock, ingat username ---- */
+function wirePassToggles(){
+  document.querySelectorAll('.pass-toggle').forEach(btn=>{
+    if(btn.dataset.bound) return;
+    btn.dataset.bound='1';
+    btn.addEventListener('click',()=>{
+      const input=document.getElementById(btn.dataset.passToggle||'loginPass');
+      if(!input) return;
+      const show=input.type==='password';
+      input.type=show?'text':'password';
+      btn.classList.toggle('on',show);
+      btn.setAttribute('aria-pressed',show?'true':'false');
+      btn.title=show?'Sembunyikan password':'Tampilkan password';
+      try{ input.focus({preventScroll:true}); }catch(e){}
+    });
+  });
+}
+function loadRememberedUser(){
+  try{
+    const remembered=localStorage.getItem('bpnarsip.rememberUser');
+    if(!remembered) return;
+    const user=document.getElementById('loginUser');
+    const rem=document.getElementById('rememberUser');
+    if(user && !user.value) user.value=remembered;
+    if(rem) rem.checked=true;
+  }catch(e){}
+}
+const loginPassEl=document.getElementById('loginPass');
+const capsHintEl=document.getElementById('capsHint');
+function syncCapsHint(e){
+  if(!capsHintEl || !e || typeof e.getModifierState!=='function') return;
+  capsHintEl.style.display=e.getModifierState('CapsLock')?'flex':'none';
+}
+if(loginPassEl){
+  loginPassEl.addEventListener('keydown',syncCapsHint);
+  loginPassEl.addEventListener('keyup',syncCapsHint);
+  loginPassEl.addEventListener('blur',()=>{ if(capsHintEl) capsHintEl.style.display='none'; });
+}
+const forgotBtn=document.getElementById('btnForgotHint');
+if(forgotBtn) forgotBtn.addEventListener('click',()=>toast('Hubungi Administrator kantor untuk mereset password akun Anda.','info',5200));
+wirePassToggles();
+loadRememberedUser();
 document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',e=>{ e.preventDefault(); showPage(item.dataset.page); }));
 document.getElementById('menuToggle').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
 
@@ -233,14 +367,51 @@ function toggleUserDropdown(){
   closeNotifDropdown(); setDropdown(d, open);
 }
 function closeUserDropdown(){ setDropdown(document.getElementById('userDropdown'), false); }
-function openGantiPass(){ document.getElementById('gpLama').value='';document.getElementById('gpBaru').value='';document.getElementById('gpUlangi').value=''; openModal('modalGantiPass'); }
+function passwordScore(v){
+  if(!v) return 0;
+  let s=0;
+  if(v.length>=6) s++;
+  if(v.length>=10) s++;
+  if(/[a-z]/.test(v)&&/[A-Z]/.test(v)) s++;
+  if(/\d/.test(v)) s++;
+  if(/[^A-Za-z0-9]/.test(v)) s++;
+  return Math.min(s,4);
+}
+function updatePwStrength(){
+  const box=document.getElementById('pwStrength');
+  const txt=document.getElementById('pwStrengthText');
+  const baru=document.getElementById('gpBaru');
+  const ulangi=document.getElementById('gpUlangi');
+  const match=document.getElementById('pwMatch');
+  if(!box||!txt||!baru) return;
+  const v=baru.value;
+  const sc=passwordScore(v);
+  box.className='pw-strength'+(sc?' s'+sc:'');
+  if(!v) txt.textContent='Minimal 6 karakter';
+  else if(v.length<6) txt.textContent='Terlalu pendek (minimal 6)';
+  else txt.textContent=['','Lemah','Cukup','Kuat','Sangat kuat'][sc]||'';
+  if(!match) return;
+  const u=ulangi?ulangi.value:'';
+  if(!u){ match.textContent=''; match.className='field-hint'; }
+  else if(u===v){ match.textContent='Password cocok'; match.className='field-hint ok'; }
+  else { match.textContent='Password belum sama'; match.className='field-hint bad'; }
+}
+const gpBaruEl=document.getElementById('gpBaru'), gpUlangiEl=document.getElementById('gpUlangi');
+if(gpBaruEl) gpBaruEl.addEventListener('input',updatePwStrength);
+if(gpUlangiEl) gpUlangiEl.addEventListener('input',updatePwStrength);
+function openGantiPass(){
+  ['gpLama','gpBaru','gpUlangi'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.value=''; el.type='password'; } });
+  document.querySelectorAll('#modalGantiPass .pass-toggle').forEach(b=>{ b.classList.remove('on'); b.setAttribute('aria-pressed','false'); });
+  updatePwStrength();
+  openModal('modalGantiPass');
+}
 document.getElementById('btnGantiPassSubmit').addEventListener('click', async ()=>{
   const lama=document.getElementById('gpLama').value, baru=document.getElementById('gpBaru').value, ulangi=document.getElementById('gpUlangi').value;
   if(!lama||!baru){ toast('Lengkapi semua field','error'); return; }
   if(baru.length<6){ toast('Password baru minimal 6 karakter','error'); return; }
   if(baru!==ulangi){ toast('Password baru tidak sama','error'); return; }
   const btn=document.getElementById('btnGantiPassSubmit'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
-  try{ await api('/api/ganti-password',{method:'POST',body:{passwordLama:lama,passwordBaru:baru}}); toast('Password berhasil diganti','success'); closeModal('modalGantiPass'); }
+  try{ await api('/api/ganti-password',{method:'POST',body:{passwordLama:lama,passwordBaru:baru}}); toast('Password berhasil diganti','success'); closeModal('modalGantiPass'); updatePwStrength(); }
   catch(err){ toast(err.message,'error'); }
   finally{ btn.disabled=false; btn.textContent=old; }
 });
@@ -306,6 +477,7 @@ function closeModal(id){
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target.classList.contains('modal-close')||e.target.classList.contains('modal-overlay')) closeModal(m.id); }));
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
+  if(cmdkState.open){ closeCmdk(); return; }
   const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display!=='none' && !m.classList.contains('closing'));
   if(open.length){ closeModal(open[open.length-1].id); return; }
   closeUserDropdown(); closeNotifDropdown();
@@ -434,6 +606,10 @@ async function loadDashboard(){
       <div class="stat-mini"><div class="sm-num" id="smHilang">0</div><div class="sm-label">Hilang</div></div>
       <div class="stat-mini"><div class="sm-num" id="smRusak">0</div><div class="sm-label">Rusak</div></div>
     </div>
+    <div class="panel rv" style="margin-bottom:24px">
+      <div class="panel-head"><div><h3 class="panel-title">Perlu Perhatian</h3><p class="panel-sub">Hal yang sebaiknya ditindaklanjuti hari ini</p></div></div>
+      <div class="panel-body"><div class="attn-body" id="dashAttention"></div></div>
+    </div>
     <div class="dash-grid-3">
       <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Distribusi Status</h3><p class="panel-sub">Komposisi berdasarkan status</p></div></div><div class="panel-body" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap"><div class="donut-wrap" id="donutStatus"></div><div class="donut-legend" id="lgStatus"></div></div></div>
       <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Arsip per Kategori</h3><p class="panel-sub">Distribusi berdasarkan jenis</p></div></div><div class="panel-body"><div id="chartKategori" class="hbar-list"></div></div></div>
@@ -460,7 +636,34 @@ async function loadDashboard(){
     renderDashPinjam(d.pinjamanAktif||[]);
     renderDashAktivitas(d.aktivitas||[]);
     renderDashArsipBaru(d.arsipTerbaru||[]);
+    renderAttention(d);
   }catch(e){ toast(e.message,'error'); }
+}
+function renderAttention(d){
+  const el=document.getElementById('dashAttention'); if(!el) return;
+  const stats=d.stats||{}, pinjam=d.pinjamanAktif||[];
+  const late=pinjam.filter(p=>p.status==='terlambat'||((daysUntil(p.tanggal_jatuh_tempo)||0)<0));
+  const soon=pinjam.filter(p=>{ const dd=daysUntil(p.tanggal_jatuh_tempo); return dd!==null && dd>=0 && dd<=3; });
+  const hilang=stats.hilang||0, rusak=stats.rusak||0;
+  const items=[];
+  if(late.length) items.push({cls:'danger',icon:ICONS.clock,title:late.length+' peminjaman terlambat',sub:'Segera hubungi peminjam',count:late.length,go:()=>showPage('peminjaman')});
+  if(soon.length) items.push({cls:'warn',icon:ICONS.clock,title:soon.length+' peminjaman jatuh tempo dekat',sub:'Tenggat dalam 3 hari atau kurang',count:soon.length,go:()=>showPage('peminjaman')});
+  if(d.disposisiProses) items.push({cls:'info',icon:ICONS.bell,title:d.disposisiProses+' disposisi masih diproses',sub:'Belum selesai ditindaklanjuti',count:d.disposisiProses,go:()=>showPage('disposisi')});
+  if((d.kegiatanHariIni||[]).length) items.push({cls:'info',icon:ICONS.clock,title:(d.kegiatanHariIni||[]).length+' kegiatan hari ini',sub:'Lihat jadwal kantor',count:(d.kegiatanHariIni||[]).length,go:()=>showPage('kalender')});
+  if(hilang+rusak) items.push({cls:'warn',icon:ICONS.warn,title:(hilang+rusak)+' arsip perlu penanganan',sub:[hilang?hilang+' hilang':'',rusak?rusak+' rusak':''].filter(Boolean).join(' · '),count:hilang+rusak,go:async()=>{ await showPage('arsip'); const s=document.getElementById('filterStatus'); if(s){ s.value='rusak'; applyFilter(); } }});
+  const draft=readDraft();
+  if(draft) items.push({cls:'info',icon:ICONS.edit,title:'Draf arsip belum disimpan',sub:'Lanjutkan pengisian arsip baru',count:1,go:()=>openTambahArsip()});
+  if(isAdmin()){
+    let last=null; try{ last=localStorage.getItem('bpnarsip.lastBackup'); }catch(e){}
+    const days=last?Math.floor((Date.now()-Number(last))/86400000):null;
+    if(days===null||days>=30) items.push({cls:'warn',icon:ICONS.warn,title:days===null?'Belum pernah backup':'Backup terakhir '+days+' hari lalu',sub:'Unduh cadangan JSON di Profil Kantor',count:1,go:()=>downloadBackup()});
+  }
+  if(!items.length){
+    el.innerHTML=`<div class="attn-item attn-ok"><div class="attn-ic">${ICONS.check}</div><div class="attn-text"><strong>Semua terkendali</strong><span>Tidak ada peminjaman terlambat, disposisi tertunda, atau arsip bermasalah.</span></div></div>`;
+    return;
+  }
+  el.innerHTML=items.map((it,i)=>`<button type="button" class="attn-item attn-${it.cls}" data-i="${i}"><div class="attn-ic">${it.icon}</div><div class="attn-text"><strong>${esc(it.title)}</strong><span>${esc(it.sub)}</span></div><span class="attn-count">${it.count}</span></button>`).join('');
+  el.querySelectorAll('.attn-item').forEach(b=>{ b.onclick=()=>{ const it=items[Number(b.dataset.i)]; if(it&&it.go) it.go(); }; });
 }
 function renderDashKegiatan(list){ const el=document.getElementById('dashKegiatan'); if(!el)return;
   if(!list.length){ el.innerHTML='<div class="empty-row">Tidak ada kegiatan terjadwal hari ini</div>'; return; }
@@ -496,13 +699,24 @@ function buildArsipLayout(){
       <input type="date" id="filterSampai" class="ctl" title="Sampai">
       <button id="btnFilter" class="btn btn-ghost">${ICONS.search} Cari</button>
     </div></div>
-    <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>No</th><th>Nomor</th><th>Kat</th><th>Judul</th><th>Tanggal</th><th>Lokasi</th><th>Status</th><th class="th-actions">Aksi</th></tr></thead><tbody id="arsipTableBody"><tr><td colspan="8" class="empty-state">Memuat...</td></tr></tbody></table></div>
+    <div class="bulk-bar" id="bulkBar">
+      <strong id="bulkCount">0 arsip dipilih</strong>
+      <div class="bulk-spacer"></div>
+      <button type="button" class="btn btn-sm" id="bulkCsv">Ekspor CSV</button>
+      <button type="button" class="btn btn-sm" id="bulkLabel">Cetak Label QR</button>
+      <button type="button" class="bulk-clear" id="bulkClear">Bersihkan</button>
+    </div>
+    <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th class="check-col"><input type="checkbox" class="check-all" id="checkAll" title="Pilih semua di halaman ini"></th><th>No</th><th>Nomor</th><th>Kat</th><th>Judul</th><th>Tanggal</th><th>Lokasi</th><th>Status</th><th class="th-actions">Aksi</th></tr></thead><tbody id="arsipTableBody"><tr><td colspan="9" class="empty-state">Memuat...</td></tr></tbody></table></div>
     <div class="table-foot"><span class="table-info" id="arsipInfo"></span><div class="pagination" id="arsipPagination"></div></div></div>`;
   document.getElementById('btnFilter').addEventListener('click',()=>{ applyFilter(); });
   document.getElementById('searchInput').addEventListener('keypress',e=>{ if(e.key==='Enter') applyFilter(); });
   fillSelect('filterKategori',Object.values(state.kategoriMap),x=>`${x.kode} — ${x.nama}`);
   fillSelect('filterInstansi',Object.values(state.instansiMap),x=>x.nama);
   fillSelect('filterLokasi',Object.values(state.lokasiMap),x=>`${x.kode} — ${x.nama}`);
+  document.getElementById('bulkCsv').addEventListener('click',exportSelectedCsv);
+  document.getElementById('bulkLabel').addEventListener('click',printSelectedLabels);
+  document.getElementById('bulkClear').addEventListener('click',()=>{ state.selectedArsip.clear(); loadArsip(); });
+  updateBulkBar();
 }
 function applyFilter(){
   state.filters.search=document.getElementById('searchInput').value.trim();
@@ -521,16 +735,38 @@ async function loadArsip(){
     const d=await api('/api/arsip?'+p); const tb=document.getElementById('arsipTableBody'); if(!tb) return; const canDel=canManage();
     if(d.total>0 && state.arsipPage>(d.totalPages||1)){ state.arsipPage=d.totalPages||1; return loadArsip(); }
     const rows=d.data||[];
-    if(!rows.length){ tb.innerHTML='<tr><td colspan="8" class="empty-state">Tidak ada data arsip</td></tr>'; }
+    state.arsipRows=rows;
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="9" class="empty-state">Tidak ada data arsip</td></tr>'; }
     else{ let i=(state.arsipPage-1)*state.arsipLimit+1;
-      tb.innerHTML=rows.map(a=>`<tr><td>${i++}</td><td class="mono strong">${esc(a.nomor_arsip)}</td><td><span class="tag">${esc(a.kategori_kode)}</span></td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDate(a.tanggal_arsip)}</td><td>${esc(a.lokasi_kode||'-')}</td><td><span class="badge badge-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td><td class="th-actions"><div class="cell-actions">
+      tb.innerHTML=rows.map(a=>{ const sel=state.selectedArsip.has(a.id);
+        return `<tr class="${sel?'row-selected':''}"><td class="check-col"><input type="checkbox" class="row-check" data-id="${a.id}" ${sel?'checked':''} aria-label="Pilih ${esc(a.nomor_arsip)}"></td><td>${i++}</td><td class="mono strong">${esc(a.nomor_arsip)}<button type="button" class="copy-btn" data-copy="${esc(a.nomor_arsip)}" title="Salin nomor arsip">${ICONS.copy}</button></td><td><span class="tag">${esc(a.kategori_kode)}</span></td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDate(a.tanggal_arsip)}</td><td>${esc(a.lokasi_kode||'-')}</td><td><span class="badge badge-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td><td class="th-actions"><div class="cell-actions">
         <button class="icon-btn" onclick="openDetail(${a.id})" title="Detail">${ICONS.eye}</button>
         <button class="icon-btn" onclick="editArsip(${a.id})" title="Edit">${ICONS.edit}</button>
         <button class="icon-btn" onclick="showQr(${a.id})" title="QR">${ICONS.qr}</button>
         <button class="icon-btn" onclick="openLampiran(${a.id})" title="Lampiran">${ICONS.clip}</button>
         ${canDel?`<button class="icon-btn danger" onclick="delArsip(${a.id})" title="Hapus">${ICONS.trash}</button>`:''}
-      </div></td></tr>`).join('');
+      </div></td></tr>`; }).join('');
+      tb.querySelectorAll('.copy-btn[data-copy]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); copyText(b.dataset.copy,'Nomor arsip'); }));
+      tb.querySelectorAll('.row-check').forEach(cb=>{
+        cb.addEventListener('change',()=>{
+          const id=Number(cb.dataset.id);
+          if(cb.checked) state.selectedArsip.add(id); else state.selectedArsip.delete(id);
+          cb.closest('tr').classList.toggle('row-selected',cb.checked);
+          updateBulkBar(); syncArsipCheckAll();
+        });
+      });
+      const all=document.getElementById('checkAll');
+      if(all){
+        all.onchange=()=>{
+          rows.forEach(a=>{ if(all.checked) state.selectedArsip.add(a.id); else state.selectedArsip.delete(a.id); });
+          tb.querySelectorAll('.row-check').forEach(cb=>{ cb.checked=all.checked; cb.closest('tr').classList.toggle('row-selected',all.checked); });
+          updateBulkBar(); syncArsipCheckAll();
+        };
+      }
+      syncArsipCheckAll();
     }
+    updateBulkBar();
+    syncArsipCheckAll();
     const from=(state.arsipPage-1)*state.arsipLimit+1, to=Math.min(state.arsipPage*state.arsipLimit,d.total);
     document.getElementById('arsipInfo').textContent=d.total===0?'Tidak ada data':`Menampilkan ${from}–${to} dari ${d.total}`;
     renderPagination('arsipPagination',d.totalPages,state.arsipPage,pp=>{state.arsipPage=pp;loadArsip();});
@@ -541,14 +777,179 @@ function renderPagination(id,tp,cur,cb){ const el=document.getElementById(id); i
   h+=`<button class="pg-btn" data-n="${cur+1}" ${cur>=tp?'disabled':''}>›</button>`; el.innerHTML=h;
   el.querySelectorAll('button[data-n]').forEach(b=>b.addEventListener('click',()=>cb(parseInt(b.dataset.n)))); }
 
-function openTambahArsip(){ document.getElementById('formArsip').reset(); document.getElementById('arsipId').value=''; document.getElementById('arsipTanggalArsip').value=todayLocal(); document.getElementById('modalArsipTitle').textContent='Tambah Arsip'; openModal('modalArsip'); }
+/* ---- Pilihan massal: ekspor CSV & label QR ---- */
+function updateBulkBar(){
+  const bar=document.getElementById('bulkBar'); if(!bar) return;
+  const n=state.selectedArsip.size;
+  bar.classList.toggle('show',n>0);
+  const c=document.getElementById('bulkCount'); if(c) c.textContent=n+' arsip dipilih';
+}
+function syncArsipCheckAll(){
+  const all=document.getElementById('checkAll'); const rows=state.arsipRows||[];
+  if(!all) return;
+  all.checked=rows.length>0 && rows.every(a=>state.selectedArsip.has(a.id));
+  all.indeterminate=!all.checked && rows.some(a=>state.selectedArsip.has(a.id));
+}
+async function exportSelectedCsv(){
+  const ids=[...state.selectedArsip]; if(!ids.length) return;
+  const btn=document.getElementById('bulkCsv'); const old=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Menyiapkan…'; }
+  try{
+    const rows=(await Promise.all(ids.map(id=>api('/api/arsip/'+id).catch(()=>null)))).filter(Boolean);
+    if(!rows.length) throw new Error('Tidak ada arsip yang bisa diekspor');
+    const head=['Nomor Arsip','Tanggal','Kategori','Nomor Surat','Judul','Perihal','Pengirim','Penerima','Instansi','Unit','Lokasi','Status'];
+    const lines=[head.map(csvCell).join(',')].concat(rows.map(a=>[
+      a.nomor_arsip,a.tanggal_arsip,((a.kategori_kode||'')+' — '+(a.kategori_nama||'')).trim(),a.nomor_surat,a.judul,a.perihal,
+      a.pengirim,a.penerima,a.instansi_nama,a.unit_nama,a.lokasi_nama||a.lokasi_fisik,STATUS_LABEL[a.status]||a.status
+    ].map(csvCell).join(',')));
+    downloadTextFile('arsip-terpilih-'+todayLocal()+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
+    toast(rows.length+' arsip diekspor ke CSV','success');
+  }catch(e){ toast(e.message,'error'); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=old; } }
+}
+async function printSelectedLabels(){
+  const ids=[...state.selectedArsip]; if(!ids.length) return;
+  const win=window.open('','_blank');
+  if(!win){ toast('Izinkan pop-up untuk mencetak label QR','error'); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Label QR Arsip</title></head><body style="font-family:Arial,sans-serif;padding:24px;color:#333">Menyiapkan label QR…</body></html>');
+  win.document.close();
+  try{
+    const list=(await Promise.all(ids.map(async id=>{
+      const [a,q]=await Promise.all([api('/api/arsip/'+id),api('/api/arsip/'+id+'/qr')]);
+      return {a,q};
+    }))).filter(x=>x.a&&x.q);
+    if(!list.length) throw new Error('Tidak ada label yang bisa dibuat');
+    const cells=list.map(({a,q})=>`<div class="lbl"><img src="${q.dataUrl}" alt="QR"><div class="lbl-no">${esc(a.nomor_arsip)}</div><div class="lbl-title">${esc(a.judul)}</div><div class="lbl-sub">${esc([(a.kategori_kode||''),(a.lokasi_nama||a.lokasi_fisik||'')].filter(Boolean).join(' · '))}</div><div class="lbl-url">${esc(q.verify_url||'')}</div></div>`).join('');
+    win.document.open();
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Label QR Arsip</title><style>
+      @page{size:A4;margin:10mm}
+      *{box-sizing:border-box}
+      body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#111}
+      .sheet{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}
+      .lbl{border:1px solid #999;border-radius:3mm;padding:4mm;text-align:center;page-break-inside:avoid;min-height:58mm;display:flex;flex-direction:column;align-items:center}
+      .lbl img{width:30mm;height:30mm;display:block}
+      .lbl-no{font-weight:700;font-size:10pt;margin-top:1.5mm;word-break:break-all}
+      .lbl-title{font-size:8pt;line-height:1.25;margin-top:.5mm;max-height:3.6em;overflow:hidden}
+      .lbl-sub{font-size:7pt;color:#555;margin-top:.5mm}
+      .lbl-url{font-size:5.5pt;color:#777;margin-top:auto;word-break:break-all;padding-top:1mm}
+    </style></head><body><div class="sheet">${cells}</div><script>window.onload=function(){setTimeout(function(){window.print()},350)}<\/script></body></html>`);
+    win.document.close();
+  }catch(e){
+    try{ win.document.body.innerHTML='<p style="font-family:Arial,sans-serif;padding:24px">Gagal menyiapkan label: '+esc(e.message)+'</p>'; }catch(_){}
+  }
+}
+
+/* ---- Draf otomatis formulir arsip ---- */
+const DRAFT_PREFIX='bpnarsip.draftArsip';
+function draftKey(){ return userStorageKey(DRAFT_PREFIX); }
+function arsipDraftFieldIds(){
+  return ['arsipKategori','arsipStatus','arsipJudul','arsipNomorSurat','arsipTanggalSurat','arsipTanggalArsip','arsipPengirim','arsipInstansi','arsipPenerima','arsipUnit','arsipLokasiSel','arsipLokasi','arsipPerihal','arsipRingkasan'];
+}
+function collectArsipForm(){
+  const o={};
+  arsipDraftFieldIds().forEach(id=>{ const el=document.getElementById(id); if(el) o[id]=el.value; });
+  return o;
+}
+function hasDraftContent(o){
+  if(!o) return false;
+  return ['arsipJudul','arsipNomorSurat','arsipPerihal','arsipRingkasan','arsipPengirim','arsipPenerima','arsipLokasi'].some(k=>String(o[k]||'').trim()!=='');
+}
+function readDraft(){
+  try{
+    const raw=localStorage.getItem(draftKey());
+    if(!raw) return null;
+    const d=JSON.parse(raw);
+    if(!d||!d.data||!hasDraftContent(d.data)) return null;
+    return d;
+  }catch(e){ return null; }
+}
+function saveDraft(){
+  const idEl=document.getElementById('arsipId');
+  if(!idEl||idEl.value) return;
+  try{
+    const data=collectArsipForm();
+    if(!hasDraftContent(data)){ localStorage.removeItem(draftKey()); return; }
+    localStorage.setItem(draftKey(),JSON.stringify({saved_at:Date.now(),data}));
+  }catch(e){ /* penyimpanan penuh / mode privat */ }
+}
+const saveDraftDebounced=debounce(saveDraft,700);
+function clearDraft(){
+  try{ localStorage.removeItem(draftKey()); }catch(e){}
+  const b=document.getElementById('arsipDraftBanner'); if(b) b.style.display='none';
+}
+function updateDraftBanner(){
+  const b=document.getElementById('arsipDraftBanner');
+  const meta=document.getElementById('draftMeta');
+  if(!b) return;
+  const d=readDraft();
+  const idEl=document.getElementById('arsipId');
+  if(!d||(idEl&&idEl.value)){ b.style.display='none'; return; }
+  if(meta){
+    const t=d.saved_at?new Date(d.saved_at):null;
+    meta.textContent=t?'Terakhir '+t.toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'Belum disimpan';
+  }
+  b.style.display='flex';
+}
+const formArsipEl=document.getElementById('formArsip');
+if(formArsipEl){
+  formArsipEl.addEventListener('input',e=>{
+    if(e.target && e.target.id==='arsipNomorSurat') scheduleDupCheck();
+    saveDraftDebounced();
+  });
+  formArsipEl.addEventListener('change',()=>saveDraftDebounced());
+}
+const btnRestoreDraft=document.getElementById('btnRestoreDraft');
+if(btnRestoreDraft) btnRestoreDraft.addEventListener('click',()=>{
+  const d=readDraft(); if(!d) return;
+  arsipDraftFieldIds().forEach(id=>{ const el=document.getElementById(id); if(el) el.value=d.data[id]||''; });
+  if(d.data.arsipKategori) { const k=document.getElementById('arsipKategori'); if(k) k.value=d.data.arsipKategori; }
+  const b=document.getElementById('arsipDraftBanner'); if(b) b.style.display='none';
+  checkDuplicateNomor();
+  toast('Draf dipulihkan','success');
+});
+const btnDiscardDraft=document.getElementById('btnDiscardDraft');
+if(btnDiscardDraft) btnDiscardDraft.addEventListener('click',()=>{ clearDraft(); toast('Draf dibuang','info'); });
+
+/* ---- Peringatan nomor surat ganda ---- */
+let dupTimer=null;
+function scheduleDupCheck(){ clearTimeout(dupTimer); dupTimer=setTimeout(checkDuplicateNomor,500); }
+async function checkDuplicateNomor(){
+  const el=document.getElementById('arsipNomorSurat');
+  const warn=document.getElementById('arsipNomorWarn');
+  if(!el||!warn) return;
+  const q=el.value.trim();
+  const currentId=document.getElementById('arsipId').value;
+  if(q.length<2){ warn.style.display='none'; warn.textContent=''; return; }
+  try{
+    const d=await api('/api/arsip?search='+encodeURIComponent(q)+'&limit=8');
+    if(el.value.trim()!==q) return;
+    const hit=(d.data||[]).filter(a=>String(a.nomor_surat||'').trim().toLowerCase()===q.toLowerCase()&&String(a.id)!==String(currentId));
+    if(!hit.length){ warn.style.display='none'; warn.className='field-warn'; warn.textContent=''; return; }
+    warn.className='field-warn bad';
+    warn.innerHTML=`Nomor surat sudah dipakai: <b>${esc(hit[0].nomor_arsip)}</b> — ${esc(hit[0].judul)}${hit.length>1?' (+'+(hit.length-1)+' lainnya)':''}. Tetap dapat disimpan bila memang berbeda.`;
+    warn.style.display='block';
+  }catch(e){ /* abaikan kegagalan pemeriksaan */ }
+}
+
+function openTambahArsip(){
+  document.getElementById('formArsip').reset();
+  document.getElementById('arsipId').value='';
+  document.getElementById('arsipTanggalArsip').value=todayLocal();
+  document.getElementById('modalArsipTitle').textContent='Tambah Arsip';
+  const nw=document.getElementById('arsipNomorWarn'); if(nw){ nw.style.display='none'; nw.textContent=''; nw.className='field-warn'; }
+  updateDraftBanner();
+  openModal('modalArsip');
+}
 window.editArsip=async function(id){ try{ const d=await api('/api/arsip/'+id);
   document.getElementById('arsipId').value=d.id; document.getElementById('arsipKategori').value=d.kategori_id; document.getElementById('arsipStatus').value=d.status;
   document.getElementById('arsipJudul').value=d.judul; document.getElementById('arsipNomorSurat').value=d.nomor_surat||''; document.getElementById('arsipTanggalSurat').value=d.tanggal_surat||'';
   document.getElementById('arsipTanggalArsip').value=d.tanggal_arsip||''; document.getElementById('arsipPengirim').value=d.pengirim||''; document.getElementById('arsipInstansi').value=d.instansi_id||'';
   document.getElementById('arsipPenerima').value=d.penerima||''; document.getElementById('arsipUnit').value=d.unit_id||''; document.getElementById('arsipLokasiSel').value=d.lokasi_id||'';
   document.getElementById('arsipLokasi').value=d.lokasi_fisik||''; document.getElementById('arsipPerihal').value=d.perihal||''; document.getElementById('arsipRingkasan').value=d.ringkasan||'';
-  document.getElementById('modalArsipTitle').textContent='Edit Arsip'; openModal('modalArsip'); }catch(e){ toast(e.message,'error'); } };
+  document.getElementById('modalArsipTitle').textContent='Edit Arsip';
+  const db=document.getElementById('arsipDraftBanner'); if(db) db.style.display='none';
+  const nw=document.getElementById('arsipNomorWarn'); if(nw){ nw.style.display='none'; nw.textContent=''; }
+  openModal('modalArsip'); }catch(e){ toast(e.message,'error'); } };
 document.getElementById('btnSimpanArsip').addEventListener('click', async ()=>{
   const id=document.getElementById('arsipId').value;
   const b={ kategori_id:document.getElementById('arsipKategori').value, judul:document.getElementById('arsipJudul').value.trim(), nomor_surat:document.getElementById('arsipNomorSurat').value.trim(),
@@ -558,9 +959,11 @@ document.getElementById('btnSimpanArsip').addEventListener('click', async ()=>{
     lokasi_fisik:document.getElementById('arsipLokasi').value.trim(), lokasi_id:document.getElementById('arsipLokasiSel').value };
   if(!b.kategori_id||!b.judul||!b.tanggal_arsip){ toast('Kategori, judul, dan tanggal wajib','error'); return; }
   try{ if(id){ await api('/api/arsip/'+id,{method:'PUT',body:b}); toast('Arsip diperbarui','success'); } else { const r=await api('/api/arsip',{method:'POST',body:b}); toast('Arsip dibuat: '+r.nomor_arsip,'success'); }
+    clearDraft();
+    const nw=document.getElementById('arsipNomorWarn'); if(nw){ nw.style.display='none'; nw.textContent=''; }
     state.arsipOptions=null; closeModal('modalArsip'); loadArsip(); }catch(e){ toast(e.message,'error'); }
 });
-window.delArsip=async function(id){ if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); state.arsipOptions=null; loadArsip(); }catch(e){ toast(e.message,'error'); } };
+window.delArsip=async function(id){ if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); state.arsipOptions=null; state.selectedArsip.delete(id); loadArsip(); }catch(e){ toast(e.message,'error'); } };
 
 /* ---- DETAIL ---- */
 window.openDetail=async function(id){
@@ -574,7 +977,7 @@ window.openDetail=async function(id){
     document.getElementById('detailContent').innerHTML=`
     <div class="detail-hero"><div class="user-avatar" style="flex-shrink:0">${esc(String(kategoriKode).charAt(0))}</div><div><div class="dh-title">${esc(d.judul)}</div><div class="dh-sub">${esc(d.nomor_arsip)}</div></div></div>
     <div class="detail-grid">
-      <div class="detail-label">Nomor Arsip</div><div class="detail-value mono strong">${esc(d.nomor_arsip)}</div>
+      <div class="detail-label">Nomor Arsip</div><div class="detail-value mono strong">${esc(d.nomor_arsip)}<button type="button" class="copy-btn" data-copy="${esc(d.nomor_arsip)}" title="Salin nomor arsip">${ICONS.copy}</button></div>
       <div class="detail-label">Kategori</div><div class="detail-value">${esc(kategoriKode)} — ${esc(d.kategori_nama||'-')}</div>
       <div class="detail-label">Nomor Surat</div><div class="detail-value">${esc(d.nomor_surat||'-')}</div>
       <div class="detail-label">Tanggal Surat</div><div class="detail-value">${formatDate(d.tanggal_surat)}</div>
@@ -589,6 +992,7 @@ window.openDetail=async function(id){
     </div>
     <div class="detail-actions no-print" style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="showQr(${d.id})">${ICONS.qr} QR</button>
+      <button class="btn btn-ghost" type="button" id="btnCopyVerify">${ICONS.copy} Salin Tautan Verifikasi</button>
       <button class="btn btn-ghost" onclick="openLampiran(${d.id})">${ICONS.clip} Lampiran</button>
       <button class="btn btn-ghost" onclick="openDisposisiModal(${d.id})">${ICONS.plus} Disposisi</button>
       <button class="btn btn-ghost" onclick="openPeminjamanModal(${d.id})">${ICONS.plus} Pinjam</button>
@@ -597,6 +1001,10 @@ window.openDetail=async function(id){
     <div class="detail-section"><h4>Disposisi</h4>${disp}</div>
     <div class="detail-section"><h4>Riwayat Peminjaman</h4>${pinj}</div>
     <div class="detail-section"><h4>Lampiran (${lampiran.length})</h4>${lampiran.length===0?'<div class="empty-state">Belum ada lampiran</div>':lampiran.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions no-print"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLamp(${l.id},${d.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('')}</div>`;
+    document.querySelectorAll('#detailContent .copy-btn[data-copy]').forEach(b=>b.addEventListener('click',()=>copyText(b.dataset.copy,'Nomor arsip')));
+    const cv=document.getElementById('btnCopyVerify');
+    if(cv) cv.addEventListener('click',()=>copyText(verifyUrlFor(d),'Tautan verifikasi'));
+    rememberRecentArsip(d);
     openModal('modalDetail');
   }catch(e){ toast(e.message,'error'); }
 };
@@ -912,9 +1320,28 @@ async function uploadFiles(files){
 }
 
 /* ============ QR ============ */
-window.showQr=async function(id){ try{ const d=await api('/api/arsip/'+id+'/qr'); document.getElementById('qrImage').innerHTML=`<img src="${d.dataUrl}" alt="QR">`; document.getElementById('qrNomor').textContent=d.nomor_arsip; openModal('modalQr'); }catch(e){ toast(e.message,'error'); } };
-document.getElementById('btnPrintQr').addEventListener('click',()=>{ const d=document.getElementById('qrImage').innerHTML; const n=document.getElementById('qrNomor').textContent;
-  const w=window.open('','_blank','width=400,height=500'); w.document.write(`<html><head><title>QR ${n}</title><style>body{font-family:sans-serif;text-align:center;padding:30px}h1{font-size:18px;margin-bottom:20px}.qr{display:inline-block;border:2px solid #333;padding:10px}</style></head><body><h1>Kantor Pertanahan</h1><div class="qr">${d}</div><p style="font-weight:bold;font-size:18px">${n}</p><script>window.onload=function(){setTimeout(function(){window.print()},300)}</scr`+`ipt></body></html>`); w.document.close(); });
+window.showQr=async function(id){
+  try{
+    const d=await api('/api/arsip/'+id+'/qr');
+    document.getElementById('qrImage').innerHTML=`<img src="${d.dataUrl}" alt="QR">`;
+    document.getElementById('qrNomor').textContent=d.nomor_arsip;
+    state.qrNomor=d.nomor_arsip;
+    state.qrVerifyUrl=d.verify_url||(location.origin+location.pathname+'?verify='+encodeURIComponent(d.kode||d.nomor_arsip));
+    const urlInput=document.getElementById('qrVerifyUrl'); if(urlInput) urlInput.value=state.qrVerifyUrl;
+    openModal('modalQr');
+  }catch(e){ toast(e.message,'error'); }
+};
+const btnCopyQrLink=document.getElementById('btnCopyQrLink');
+if(btnCopyQrLink) btnCopyQrLink.addEventListener('click',()=>copyText(state.qrVerifyUrl||document.getElementById('qrVerifyUrl').value,'Tautan verifikasi'));
+document.getElementById('btnPrintQr').addEventListener('click',()=>{
+  const d=document.getElementById('qrImage').innerHTML;
+  const n=document.getElementById('qrNomor').textContent;
+  const verify=state.qrVerifyUrl||document.getElementById('qrVerifyUrl').value||'';
+  const w=window.open('','_blank','width=400,height=560');
+  if(!w){ toast('Izinkan pop-up untuk mencetak QR','error'); return; }
+  w.document.write(`<html><head><title>QR ${esc(n)}</title><style>body{font-family:sans-serif;text-align:center;padding:30px}h1{font-size:18px;margin-bottom:20px}.qr{display:inline-block;border:2px solid #333;padding:10px}p{font-weight:bold;font-size:18px}.url{font-size:9px;color:#555;word-break:break-all;font-weight:400;max-width:300px;margin:10px auto 0}</style></head><body><h1>Kantor Pertanahan</h1><div class="qr">${d}</div><p>${esc(n)}</p>${verify?`<div class="url">${esc(verify)}</div>`:''}<script>window.onload=function(){setTimeout(function(){window.print()},300)}</scr`+`ipt></body></html>`);
+  w.document.close();
+});
 
 /* ============ DISPOSISI SAVE ============ */
 document.getElementById('btnSimpanDisposisi').addEventListener('click',async()=>{
@@ -979,13 +1406,23 @@ function kopsHTML(s){
   const addr=[s.alamat||'', s.telepon?('Telepon: '+s.telepon):'', s.email?('Email: '+s.email):''].filter(Boolean).map(esc).join('<br>');
   return `<h4>${esc(s.nama_kantor||'Kantor Pertanahan')}</h4><div class="kp-sub">${esc(s.sub_nama||'Badan Pertanahan Nasional')}</div><div class="kp-addr">${addr}</div><div class="kp-motto">${esc(s.motto||'')}</div><div class="kp-kepala">${esc(s.kepala_nama||'')}${s.kepala_nip?'<br>NIP. '+esc(s.kepala_nip):''}</div>`;
 }
+function backupNoteHTML(){
+  let last=null;
+  try{ last=localStorage.getItem('bpnarsip.lastBackup'); }catch(e){}
+  if(!last) return '<div class="backup-note">Belum ada catatan backup di perangkat ini. Unduh cadangan secara berkala agar data tetap aman.</div>';
+  const ts=Number(last);
+  const days=Math.floor((Date.now()-ts)/86400000);
+  const t=new Date(ts).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  if(days>=30) return `<div class="backup-note">Backup terakhir ${t} (${days} hari lalu). Sebaiknya unduh cadangan baru sekarang.</div>`;
+  return `<div class="backup-note ok">Backup terakhir ${t}.</div>`;
+}
 async function loadProfilPage(){
   const sec=document.getElementById('page-profil');
   try{
     const s=await api('/api/settings'); state.settings=s;
     sec.innerHTML=`<div class="profil-grid">
       <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Identitas &amp; Kop Surat</h3><p class="panel-sub">Dipakai pada laporan cetak dan ekspor</p></div>${isAdmin()?`<button id="btnEditProfil" class="btn btn-ghost btn-sm">${ICONS.edit} Edit</button>`:''}</div><div class="panel-body"><div class="kop-preview">${kopsHTML(s)}</div></div></div>
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Cadangan Data</h3><p class="panel-sub">Full backup seluruh database</p></div></div><div class="panel-body backup-card"><div class="bc-ic"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div><h4>Unduh Backup</h4><p>Mengunduh keseluruhan data (profil, pengguna, arsip, disposisi, peminjaman, agenda, dan log) dalam satu berkas JSON.</p>${isAdmin()?`<button id="btnBackup" class="btn btn-primary">Unduh Backup JSON</button>`:`<span class="table-info">Hanya Administrator</span>`}</div></div>
+      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Cadangan Data</h3><p class="panel-sub">Full backup seluruh database</p></div></div><div class="panel-body backup-card"><div class="bc-ic"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div><h4>Unduh Backup</h4><p>Mengunduh keseluruhan data (profil, pengguna, arsip, disposisi, peminjaman, agenda, dan log) dalam satu berkas JSON.</p>${isAdmin()?`<button id="btnBackup" class="btn btn-primary">Unduh Backup JSON</button>${backupNoteHTML()}`:`<span class="table-info">Hanya Administrator</span>`}</div></div>
     </div>`;
     observeReveals(sec);
     const eb=document.getElementById('btnEditProfil'); if(eb) eb.onclick=openProfilEdit;
@@ -1201,12 +1638,244 @@ document.getElementById('btnSimpanKegiatan').addEventListener('click',async()=>{
     closeModal('modalKegiatan'); state.kegMapLoaded=false; loadKalenderPage(); }catch(e){ toast(e.message,'error'); }
 });
 
+/* ============ VERIFIKASI QR PUBLIK ============ */
+function verifyKodeFromUrl(){
+  try{
+    const u=new URL(location.href);
+    const k=u.searchParams.get('verify');
+    return k?String(k).trim():'';
+  }catch(e){ return ''; }
+}
+function bootVerifyPage(kode){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('appPage').style.display='none';
+  const vp=document.getElementById('verifyPage');
+  if(vp) vp.style.display='flex';
+  document.title='Verifikasi Arsip — '+kode;
+  loadVerifyPage(kode);
+}
+async function loadVerifyPage(kode){
+  const body=document.getElementById('verifyBody');
+  if(!body) return;
+  body.innerHTML='<div class="verify-loading"><span class="verify-spinner"></span> Memeriksa kode verifikasi…</div>';
+  try{
+    const d=await api('/api/verify/'+encodeURIComponent(kode));
+    const a=d.arsip||{}, k=d.kantor||{};
+    if(k.nama_kantor){ const el=document.getElementById('verifyKantor'); if(el) el.textContent=k.nama_kantor; document.title='Verifikasi '+a.nomor_arsip+' — '+k.nama_kantor; }
+    if(k.sub_nama){ const el=document.getElementById('verifySub'); if(el) el.textContent=k.sub_nama; }
+    body.innerHTML=`
+      <div class="verify-seal">${ICONS.check}</div>
+      <h2 class="verify-title">Arsip Terverifikasi</h2>
+      <p class="verify-sub">Kode ini cocok dengan arsip yang tercatat pada sistem kearsipan.</p>
+      <dl class="verify-data">
+        <div><dt>Nomor Arsip</dt><dd>${esc(a.nomor_arsip||'-')}</dd></div>
+        <div><dt>Judul</dt><dd>${esc(a.judul||'-')}</dd></div>
+        <div><dt>Kategori</dt><dd>${esc([a.kategori_kode,a.kategori_nama].filter(Boolean).join(' — ')||'-')}</dd></div>
+        <div><dt>Tanggal Arsip</dt><dd>${formatDate(a.tanggal_arsip)}</dd></div>
+        <div><dt>Status</dt><dd><span class="badge badge-${esc(a.status||'')}">${esc(STATUS_LABEL[a.status]||a.status||'-')}</span></dd></div>
+        <div><dt>Lokasi</dt><dd>${esc(a.lokasi_nama||'-')}</dd></div>
+        <div><dt>Instansi</dt><dd>${esc(a.instansi_nama||'-')}</dd></div>
+      </dl>
+      <p class="verify-note">Halaman ini hanya menampilkan metadata terbatas. Untuk melihat dokumen lengkap, hubungi kantor pertanahan dan sebutkan nomor arsip di atas.</p>`;
+  }catch(e){
+    body.innerHTML=`
+      <div class="verify-seal bad">${ICONS.x}</div>
+      <h2 class="verify-title">Verifikasi Gagal</h2>
+      <p class="verify-sub">${esc(e.message||'Kode verifikasi tidak ditemukan.')}</p>
+      <p class="verify-note">Pastikan kode QR tidak rusak atau sudah tidak berlaku. Kode pada arsip yang telah dihapus tidak dapat diverifikasi.</p>`;
+  }
+}
+function exitVerifyPage(){
+  try{
+    const u=new URL(location.href);
+    u.searchParams.delete('verify');
+    history.replaceState(null,'',u.pathname+(u.search||'')+(u.hash||''));
+  }catch(e){}
+  const vp=document.getElementById('verifyPage'); if(vp) vp.style.display='none';
+  document.title='Sistem Arsip — Kantor Pertanahan';
+  init();
+}
+const verifyOpenBtn=document.getElementById('verifyOpenApp');
+if(verifyOpenBtn) verifyOpenBtn.addEventListener('click',exitVerifyPage);
+
+/* ============ PENCARIAN CEPAT (CTRL+K) & PINTASAN ============ */
+const cmdkState={open:false,items:[],active:0,query:'',reqId:0};
+function cmdMatch(q,...parts){ return !q || parts.join(' ').toLowerCase().includes(q); }
+function buildStaticCmdk(q){
+  const items=[];
+  if(!q){
+    getRecentArsip().forEach(a=>items.push({
+      group:'Terakhir Dibuka',title:a.judul,sub:a.nomor_arsip,
+      icon:`<span>${esc((a.kategori_kode||'A').charAt(0))}</span>`,
+      run:()=>{ showPage('arsip'); openDetail(a.id); }
+    }));
+  }
+  Object.keys(PAGE_META).forEach(p=>{
+    if(!canAccessPage(p)) return;
+    const [t,s]=PAGE_META[p];
+    if(!cmdMatch(q,t,s,p)) return;
+    items.push({group:'Menu',title:t,sub:s,icon:ICONS.grid,run:()=>showPage(p)});
+  });
+  const acts=[];
+  if(canManage()) acts.push({title:'Tambah Arsip Baru',sub:'Buka formulir arsip',icon:ICONS.plus,kbd:'N',run:()=>openTambahArsip()});
+  acts.push({title:'Profil Kantor',sub:'Identitas, kop surat, dan cadangan',icon:ICONS.edit,run:()=>showPage('profil')});
+  acts.push({title:'Ganti Password',sub:'Perbarui kata sandi akun',icon:ICONS.edit,run:()=>openGantiPass()});
+  acts.push({title:'Pintasan Keyboard',sub:'Lihat daftar pintasan',icon:ICONS.grid,kbd:'?',run:()=>showShortcuts()});
+  if(canManage()) acts.push({title:'Import CSV',sub:'Impor arsip dari berkas CSV',icon:ICONS.plus,run:()=>openImportModal()});
+  if(canManage()) acts.push({title:'Tempat Sampah',sub:'Pulihkan arsip terhapus',icon:ICONS.restore,run:()=>showPage('sampah')});
+  if(isAdmin()) acts.push({title:'Unduh Backup JSON',sub:'Cadangkan seluruh database',icon:ICONS.copy,run:()=>downloadBackup()});
+  acts.filter(a=>cmdMatch(q,a.title,a.sub)).forEach(a=>items.push({group:'Aksi',...a}));
+  if(q.length>=2 && q && items.length===0) items.push({group:'Arsip',title:'Mencari arsip…',sub:'Ketik untuk menyaring',icon:ICONS.search,run:()=>{}});
+  return items;
+}
+function paintCmdk(items){
+  const box=document.getElementById('cmdkResults');
+  if(!box) return;
+  cmdkState.items=items;
+  if(!items.length){
+    box.innerHTML='<div class="cmdk-empty">Tidak ada hasil.<br>Ketik judul, nomor arsip, atau nama menu.</div>';
+    return;
+  }
+  let h='',last='';
+  items.forEach((it,i)=>{
+    if(it.group!==last){ h+=`<div class="cmdk-group">${esc(it.group)}</div>`; last=it.group; }
+    h+=`<div class="cmdk-item ${i===cmdkState.active?'active':''}" role="option" data-i="${i}"><div class="cmdk-ic">${it.icon||ICONS.grid}</div><div class="cmdk-item-body"><strong>${esc(it.title)}</strong>${it.sub?`<span>${esc(it.sub)}</span>`:''}</div>${it.kbd?`<kbd>${esc(it.kbd)}</kbd>`:''}</div>`;
+  });
+  box.innerHTML=h;
+  box.querySelectorAll('.cmdk-item').forEach(el=>{
+    el.addEventListener('mousemove',()=>{ const i=Number(el.dataset.i); if(cmdkState.active!==i){ cmdkState.active=i; syncCmdkActive(); } });
+    el.addEventListener('click',()=>runCmdk(Number(el.dataset.i)));
+  });
+  syncCmdkActive();
+}
+function syncCmdkActive(){
+  const box=document.getElementById('cmdkResults'); if(!box) return;
+  box.querySelectorAll('.cmdk-item').forEach(el=>el.classList.toggle('active',Number(el.dataset.i)===cmdkState.active));
+  const act=box.querySelector('.cmdk-item.active');
+  if(act && act.scrollIntoView){ try{ act.scrollIntoView({block:'nearest'}); }catch(e){} }
+}
+function moveCmdk(delta){
+  if(!cmdkState.items.length) return;
+  let i=cmdkState.active+delta;
+  if(i<0) i=cmdkState.items.length-1;
+  if(i>=cmdkState.items.length) i=0;
+  cmdkState.active=i; syncCmdkActive();
+}
+function runCmdk(i){
+  const it=cmdkState.items[i!=null?i:cmdkState.active];
+  if(!it) return;
+  closeCmdk();
+  setTimeout(()=>{ try{ it.run(); }catch(e){ toast(e.message||'Aksi gagal dijalankan','error'); } },90);
+}
+async function renderCmdk(withSearch){
+  const q=cmdkState.query.trim().toLowerCase();
+  const items=buildStaticCmdk(q);
+  if(withSearch && q.length>=2){
+    const rid=++cmdkState.reqId;
+    try{
+      const d=await api('/api/arsip?search='+encodeURIComponent(q)+'&limit=8');
+      if(!cmdkState.open||rid!==cmdkState.reqId||cmdkState.query.trim().toLowerCase()!==q) return;
+      const found=(d.data||[]).filter(a=>!items.some(x=>x.group==='Arsip'&&x.id===a.id));
+      if(items.length&&items[items.length-1].group==='Arsip'&&items[items.length-1].title==='Mencari arsip…') items.pop();
+      found.forEach(a=>items.push({
+        group:'Arsip',id:a.id,title:a.judul,sub:a.nomor_arsip+' · '+formatDate(a.tanggal_arsip),
+        icon:`<span>${esc((a.kategori_kode||'A').charAt(0))}</span>`,
+        run:()=>{ showPage('arsip'); openDetail(a.id); }
+      }));
+      if(!found.length) items.push({group:'Arsip',title:'Arsip tidak ditemukan',sub:'Coba kata kunci lain',icon:ICONS.search,run:()=>{}});
+    }catch(e){ if(rid===cmdkState.reqId){ items.push({group:'Arsip',title:'Gagal mencari arsip',sub:e.message,icon:ICONS.warn,run:()=>{}}); } }
+    if(!cmdkState.open||rid!==cmdkState.reqId) return;
+  }
+  paintCmdk(items);
+  const sc=document.getElementById('cmdkScope');
+  if(sc) sc.textContent=q?(q.length<2?'Ketik ≥2 huruf':items.filter(x=>x.group==='Arsip').length+' arsip'):'Semua';
+}
+const cmdkSearchDebounced=debounce(()=>renderCmdk(true),180);
+function onCmdkInput(){
+  const input=document.getElementById('cmdkInput'); if(!input) return;
+  cmdkState.query=input.value; cmdkState.active=0;
+  renderCmdk(false);
+  if(cmdkState.query.trim().length>=2) cmdkSearchDebounced();
+}
+function openCmdk(seed){
+  if(!state.currentUser) return;
+  const el=document.getElementById('cmdPalette'); if(!el) return;
+  cmdkState.open=true; cmdkState.active=0; cmdkState.query=seed||'';
+  el.style.display='flex';
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(()=>el.classList.add('open'));
+  const input=document.getElementById('cmdkInput');
+  if(input) input.value=seed||'';
+  renderCmdk(true);
+  setTimeout(()=>{ if(input){ try{ input.focus({preventScroll:true}); }catch(e){} } },60);
+}
+function closeCmdk(){
+  const el=document.getElementById('cmdPalette'); if(!el||!cmdkState.open) return;
+  cmdkState.open=false; cmdkState.reqId++;
+  el.classList.remove('open');
+  setTimeout(()=>{ if(!cmdkState.open) el.style.display='none'; },180);
+  const anyModal=[...document.querySelectorAll('.modal')].some(m=>m.style.display!=='none'&&!m.classList.contains('closing'));
+  if(!anyModal) document.body.classList.remove('modal-open');
+}
+async function goToArsipSearch(){
+  if(state.currentPage!=='arsip') await showPage('arsip');
+  const el=document.getElementById('searchInput');
+  if(el){ el.focus(); try{ el.select(); }catch(e){} }
+}
+function showShortcuts(){ openModal('modalShortcuts'); }
+const cmdkInputEl=document.getElementById('cmdkInput');
+if(cmdkInputEl){
+  cmdkInputEl.addEventListener('input',onCmdkInput);
+  cmdkInputEl.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); moveCmdk(1); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); moveCmdk(-1); }
+    else if(e.key==='Enter'){ e.preventDefault(); runCmdk(); }
+    else if(e.key==='Escape'){ e.preventDefault(); closeCmdk(); }
+  });
+}
+const btnCmdk=document.getElementById('btnCmdk');
+if(btnCmdk) btnCmdk.addEventListener('click',()=>openCmdk());
+const cmdPalette=document.getElementById('cmdPalette');
+if(cmdPalette) cmdPalette.addEventListener('click',e=>{ if(e.target.closest('[data-cmdk-close]')) closeCmdk(); });
+const btnShortcuts=document.getElementById('btnShortcuts');
+if(btnShortcuts) btnShortcuts.addEventListener('click',()=>{ closeUserDropdown(); showShortcuts(); });
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){
+    e.preventDefault();
+    if(cmdkState.open) closeCmdk(); else openCmdk();
+    return;
+  }
+  if(cmdkState.open) return;
+  if(!state.currentUser) return;
+  const ae=document.activeElement;
+  const typing=ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)||ae.isContentEditable);
+  if(typing||e.ctrlKey||e.metaKey) return;
+  if(e.altKey&&/^[1-5]$/.test(e.key)){
+    e.preventDefault();
+    showPage(['dashboard','arsip','buku-agenda','disposisi','peminjaman'][Number(e.key)-1]);
+    return;
+  }
+  if(e.key==='?'){ e.preventDefault(); showShortcuts(); return; }
+  const anyModal=[...document.querySelectorAll('.modal')].some(m=>m.style.display!=='none'&&!m.classList.contains('closing'));
+  if(anyModal) return;
+  if(e.key==='/'){ e.preventDefault(); goToArsipSearch(); }
+  else if((e.key==='n'||e.key==='N')&&canManage()){ e.preventDefault(); openTambahArsip(); }
+});
+
 /* ============ INIT ============ */
 function hideSplash(){ const sp=document.getElementById('splashScreen'); if(sp) sp.classList.add('hide'); }
 async function init(){
   startClock();
   document.getElementById('footerYear').textContent=new Date().getFullYear();
   buildUsersLayout();
+  wirePassToggles();
+  loadRememberedUser();
+  const verifyKode=verifyKodeFromUrl();
+  if(verifyKode){
+    bootVerifyPage(verifyKode);
+    setTimeout(hideSplash, 650);
+    return;
+  }
   try{
     const [d, settings] = await Promise.all([api('/api/me'), api('/api/settings').catch(()=>null)]);
     if(settings){ state.settings=settings; applySettings(settings); }

@@ -117,6 +117,7 @@
       ['kategori', 'unit', 'instansi', 'lokasi', 'arsip', 'lampiran', 'disposisi', 'peminjaman', 'log', 'notifikasi', 'bukuAgenda', 'agenda'].forEach(function (k) {
         if (!Array.isArray(existing[k])) existing[k] = [];
       });
+      existing.arsip.forEach(function (a) { if (!a.kode_qr) a.kode_qr = makeKodeQr(a.nomor_arsip); });
       if (!existing.settings) existing.settings = clone(SETTINGS);
       DB = existing; return DB;
     }
@@ -201,6 +202,7 @@
     return prefix + String(count + 1).padStart(4, '0');
   }
   function makeKodeQr(nomor) { return nomor + '|a&s|' + uid(); }
+  function verifyUrl(kode) { return location.origin + location.pathname + '?verify=' + encodeURIComponent(kode); }
 
   /* ===================== QR (client-side) ===================== */
   async function makeQrDataUrl(text) {
@@ -235,6 +237,22 @@
     if (!u) throw authError('Sesi berakhir, silakan masuk kembali', 401);
     if (roles.indexOf(u.role) === -1) throw authError('Akses ditolak', 403);
   }
+  // Pembatas percobaan login (setara rate limit di server) — hanya sesi browser ini.
+  var loginAttempts = {};
+  function loginKey(username) { return String(username || '').trim().toLowerCase(); }
+  function loginCheck(key) {
+    var b = loginAttempts[key];
+    if (b && b.count >= 5 && Date.now() < b.reset) {
+      var e = authError('Terlalu banyak percobaan masuk. Coba lagi dalam ' + Math.ceil((b.reset - Date.now()) / 60000) + ' menit.', 429);
+      throw e;
+    }
+  }
+  function loginFail(key) {
+    var b = loginAttempts[key];
+    if (!b || Date.now() > b.reset) b = loginAttempts[key] = { count: 0, reset: Date.now() + 10 * 60000 };
+    b.count++;
+  }
+  function loginClear(key) { delete loginAttempts[key]; }
 
   /* ===================== ROUTER ===================== */
   async function mockApi(url, options) {
@@ -249,12 +267,34 @@
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
     body = body || {};
 
+    // ---- VERIFIKASI QR (publik, tanpa login) ----
+    var mVerify = path.match(/^\/api\/verify\/(.+)$/);
+    if (mVerify && method === 'GET') {
+      var vk = decodeURIComponent(mVerify[1] || '').trim();
+      var va = null;
+      for (var vi = 0; vi < DB.arsip.length; vi++) {
+        var ax = DB.arsip[vi];
+        if (!ax.deleted_at && String(ax.kode_qr) === vk) { va = ax; break; }
+      }
+      if (!va) va = DB.arsip.filter(function (a) { return !a.deleted_at && a.nomor_arsip === vk; })[0] || null;
+      if (!va) throw authError('Arsip tidak ditemukan atau sudah dihapus', 404);
+      var vj = joinArsip(va), vs = DB.settings || {};
+      return {
+        verified: true,
+        arsip: { nomor_arsip: vj.nomor_arsip, judul: vj.judul, kategori_kode: vj.kategori_kode, kategori_nama: vj.kategori_nama, tanggal_arsip: vj.tanggal_arsip, status: vj.status, lokasi_nama: vj.lokasi_nama, instansi_nama: vj.instansi_nama },
+        kantor: { nama_kantor: vs.nama_kantor || 'Kantor Pertanahan', sub_nama: vs.sub_nama || 'Badan Pertanahan Nasional' }
+      };
+    }
+
     // ---- AUTH ----
     if (path === '/api/login' && method === 'POST') {
+      var lk = loginKey(body.username);
+      loginCheck(lk);
       var user = null;
       for (var i = 0; i < DB.users.length; i++) if (DB.users[i].username === String(body.username || '').trim()) user = DB.users[i];
-      if (!user || !user.aktif) throw new Error('Username/password salah atau akun nonaktif');
-      if (!(await checkPassword(String(body.password || ''), user.password_hash))) throw new Error('Username/password salah');
+      if (!user || !user.aktif) { loginFail(lk); throw new Error('Username/password salah atau akun nonaktif'); }
+      if (!(await checkPassword(String(body.password || ''), user.password_hash))) { loginFail(lk); throw new Error('Username/password salah'); }
+      loginClear(lk);
       user.last_login = nowIso();
       sessionSet(user.id);
       buatNotifikasi(user.id, 'Login berhasil', 'Selamat datang kembali, ' + user.nama, 'info', null, null);
@@ -499,7 +539,8 @@
     if (mQr && method === 'GET') {
       requireAuth();
       var qa = byId(DB.arsip, mQr[1]); if (!qa) throw new Error('Tidak ditemukan');
-      return { dataUrl: await makeQrDataUrl(qa.kode_qr || qa.nomor_arsip), nomor_arsip: qa.nomor_arsip };
+      var qk = qa.kode_qr || qa.nomor_arsip;
+      return { dataUrl: await makeQrDataUrl(verifyUrl(qk)), nomor_arsip: qa.nomor_arsip, kode: qk, verify_url: verifyUrl(qk) };
     }
     if (mArsipId && method === 'GET') {
       requireAuth();
@@ -717,6 +758,7 @@
         stats: arsipStats(), byKategori: statsByKategori(), byBulan: statsByBulan(), byStatus: statsByStatus(),
         kegiatanHariIni: DB.agenda.filter(function (a) { return a.tanggal === today(); }).sort(function (a, b) { return byDateAsc(a.jam_mulai || '', b.jam_mulai || ''); }),
         pinjamanAktif: DB.peminjaman.filter(function (p) { var a = byId(DB.arsip, p.arsip_id); return (p.status === 'dipinjam' || p.status === 'terlambat') && a && !a.deleted_at; }).sort(function (a, b) { return a.tanggal_jatuh_tempo < b.tanggal_jatuh_tempo ? -1 : 1; }).map(joinPeminjaman),
+        disposisiProses: DB.disposisi.filter(function (d) { var a = byId(DB.arsip, d.arsip_id); return d.status === 'proses' && a && !a.deleted_at; }).length,
         disposisiTerbaru: DB.disposisi.filter(function (d) { var a = byId(DB.arsip, d.arsip_id); return a && !a.deleted_at; }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 6).map(function (d) { var o = joinDisposisi(d); var a = byId(DB.arsip, d.arsip_id) || {}; o.nomor_arsip = a.nomor_arsip || ''; o.arsip_judul = a.judul || ''; return o; }),
         arsipTerbaru: DB.arsip.filter(function (a) { return !a.deleted_at; }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 6).map(joinArsip),
         aktivitas: DB.log.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 8).map(function (l) { var uu = byId(DB.users, l.user_id) || {}; var o = clone(l); o.user_nama = uu.nama || ''; return o; }),

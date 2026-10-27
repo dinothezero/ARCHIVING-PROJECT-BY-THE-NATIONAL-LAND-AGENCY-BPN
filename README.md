@@ -15,6 +15,13 @@ Berjalan 100% lokal di komputer Anda, **tanpa biaya** dan tanpa internet (data t
 - **Peminjaman** — catat peminjaman, jatuh tempo, penanda arsip dipinjam, dan deteksi keterlambatan
 - **Upload/Download lampiran** — PDF, JPG, PNG, DOC, DOCX, XLS, TXT (maks 50MB) via klik atau drag-and-drop
 - **Barcode / QR** — setiap arsip punya kode QR yang bisa dicetak untuk pelacakan fisik
+- **Verifikasi QR publik** — QR mengarah ke halaman verifikasi tanpa login yang hanya menampilkan metadata aman (nomor, judul, kategori, status, lokasi, instansi); tautan verifikasi bisa disalin dan ikut tercetak di label
+- **Pencarian cepat Ctrl+K** — palet perintah untuk mencari arsip dan menjalankan menu/aksi dari mana saja, plus pintasan keyboard (`/`, `N`, `Alt+1–5`, `?`)
+- **Panel "Perlu Perhatian"** — ringkasan hal yang perlu ditindaklanjuti hari ini: peminjaman terlambat/dekat tempo, disposisi diproses, arsip hilang/rusak, draf belum disimpan, dan pengingat backup
+- **Pilihan massal** — centang banyak arsip sekaligus untuk ekspor CSV atau cetak label QR ukuran A4 (3 kolom)
+- **Draf otomatis & peringatan nomor ganda** — formulir arsip menyimpan draf otomatis (bisa dipulihkan/dibuang) dan memberi peringatan bila nomor surat sudah dipakai
+- **Login lebih nyaman & aman** — tampilkan/sembunyikan password, peringatan Caps Lock, ingat username, dan meter kekuatan password saat ganti password
+- **Arsip terakhir dibuka** — daftar arsip yang baru saja dibuka muncul di palet Ctrl+K untuk akses cepat
 - **Pencarian & filter** — by nomor, judul, perihal, kategori, status, instansi, lokasi, rentang tanggal
 - **Tempat Sampah** — hapus lunak (soft delete), pulihkan, atau hapus permanen
 - **Dashboard statistik** — hero sapaan + jam realtime, kartu animasi (count-up), donat status arsip, arsip per kategori, tren 12 bulan, agenda hari ini, peminjaman aktif, disposisi & aktivitas terbaru

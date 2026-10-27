@@ -113,6 +113,7 @@ module.exports = {
   `),
   getArsipById: db.prepare(`${ARSIP_SELECT} WHERE a.id = ?`),
   getArsipByNomor: db.prepare(`${ARSIP_SELECT} WHERE a.nomor_arsip = ? AND a.deleted_at IS NULL`),
+  getArsipByKodeQr: db.prepare(`${ARSIP_SELECT} WHERE a.kode_qr = ? AND a.deleted_at IS NULL`),
   insertArsip: db.prepare(`
     INSERT INTO arsip (nomor_arsip, kategori_id, judul, nomor_surat, tanggal_surat, tanggal_arsip, pengirim, instansi_id, penerima, unit_id, perihal, ringkasan, status, lokasi_fisik, lokasi_id, kode_qr, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -298,5 +299,10 @@ module.exports = {
     LEFT JOIN users k ON d.kepada_user = k.id
     JOIN arsip a ON d.arsip_id = a.id
     ORDER BY d.created_at DESC LIMIT ?
+  `),
+  getDisposisiProsesCount: db.prepare(`
+    SELECT COUNT(*) AS jumlah FROM disposisi d
+    JOIN arsip a ON d.arsip_id = a.id
+    WHERE d.status = 'proses' AND a.deleted_at IS NULL
   `)
 };

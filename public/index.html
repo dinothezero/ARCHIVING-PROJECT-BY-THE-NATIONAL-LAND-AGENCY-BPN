@@ -57,15 +57,40 @@
         </div>
         <div class="field">
           <label for="loginPass">Password</label>
-          <div class="input-wrap">
+          <div class="input-wrap pass-wrap">
             <svg class="input-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <input type="password" id="loginPass" placeholder="Masukkan password" required>
+            <input type="password" id="loginPass" placeholder="Masukkan password" required autocomplete="current-password">
+            <button type="button" id="toggleLoginPass" class="pass-toggle" aria-label="Tampilkan password" aria-pressed="false" title="Tampilkan password">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
+          <p id="capsHint" class="caps-hint" style="display:none">Caps Lock sedang aktif</p>
+        </div>
+        <div class="login-extra">
+          <label class="remember-me"><input type="checkbox" id="rememberUser" checked><span>Ingat username</span></label>
+          <button type="button" id="btnForgotHint" class="link-btn">Lupa password?</button>
         </div>
         <div id="loginError" class="error-msg shake" style="display:none" role="alert" aria-live="assertive"></div>
         <button type="submit" class="btn-login">Masuk <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
       </form>
       <p id="staticModeNote" class="static-mode-note" style="display:none">Mode demo GitHub Pages — data disimpan di browser ini (localStorage), tidak dikirim ke server. Unduh Backup JSON secara berkala dari menu Profil Kantor.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VERIFIKASI QR (PUBLIK) ============ -->
+<div id="verifyPage" class="verify-wrap" style="display:none">
+  <div class="verify-card">
+    <div class="verify-brand">
+      <svg viewBox="0 0 64 64" width="44" height="44" fill="none"><rect x="2" y="2" width="60" height="60" rx="13" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+      <div><strong id="verifyKantor">Kantor Pertanahan</strong><span id="verifySub">Badan Pertanahan Nasional</span></div>
+    </div>
+    <div id="verifyBody" class="verify-body">
+      <div class="verify-loading"><span class="verify-spinner"></span> Memeriksa kode verifikasi…</div>
+    </div>
+    <div class="verify-foot">
+      <button id="verifyOpenApp" class="btn btn-primary btn-full">Buka Aplikasi Arsip</button>
+      <p>Halaman ini hanya menampilkan metadata arsip. Isi dokumen tetap terlindungi.</p>
     </div>
   </div>
 </div>
@@ -84,6 +109,11 @@
       </div>
       <div class="topbar-brand-text"><strong>Kantor Pertanahan</strong><span>Badan Pertanahan Nasional</span></div>
     </div>
+    <button id="btnCmdk" type="button" class="topbar-search" aria-label="Pencarian cepat" title="Pencarian cepat (Ctrl+K)">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Cari arsip atau menu…</span>
+      <kbd>Ctrl K</kbd>
+    </button>
     <div class="topbar-right">
       <div class="top-clock" id="topClock"><span class="tc-time">--:--:--</span><span class="tc-date">-</span></div>
       <div class="notif-wrap">
@@ -107,6 +137,7 @@
     <div id="userDropdown" class="user-dropdown" style="display:none">
       <div class="ud-head"><strong id="udName">-</strong><span id="udRole">-</span></div>
       <button id="btnGantiPass" class="ud-item">Ganti Password</button>
+      <button id="btnShortcuts" class="ud-item">Pintasan Keyboard</button>
     </div>
   </header>
   <div class="gov-stripe"><span class="st-gold"></span><span class="st-green"></span><span class="st-teal"></span></div>
@@ -227,6 +258,13 @@
   <div class="modal-panel modal-lg">
     <div class="modal-head"><h3 id="modalArsipTitle">Tambah Arsip</h3><button class="icon-btn modal-close">&times;</button></div>
     <div class="modal-body">
+      <div id="arsipDraftBanner" class="draft-banner" style="display:none">
+        <div class="draft-banner-text"><strong>Draf tersimpan</strong><span id="draftMeta"></span></div>
+        <div class="draft-banner-actions">
+          <button type="button" id="btnRestoreDraft" class="btn btn-sm btn-primary">Pulihkan</button>
+          <button type="button" id="btnDiscardDraft" class="btn btn-sm btn-ghost">Buang</button>
+        </div>
+      </div>
       <form id="formArsip">
         <input type="hidden" id="arsipId">
         <div class="form-row">
@@ -237,7 +275,7 @@
         </div>
         <div class="field"><label>Judul <span class="req">*</span></label><input type="text" id="arsipJudul" class="ctl" required placeholder="Judul arsip"></div>
         <div class="form-row">
-          <div class="field"><label>Nomor Surat</label><input type="text" id="arsipNomorSurat" class="ctl" placeholder="Nomor surat"></div>
+          <div class="field"><label>Nomor Surat</label><input type="text" id="arsipNomorSurat" class="ctl" placeholder="Nomor surat"><p id="arsipNomorWarn" class="field-warn" style="display:none"></p></div>
           <div class="field"><label>Tanggal Surat</label><input type="date" id="arsipTanggalSurat" class="ctl"></div>
           <div class="field"><label>Tanggal Arsip <span class="req">*</span></label><input type="date" id="arsipTanggalArsip" class="ctl" required></div>
         </div>
@@ -306,6 +344,11 @@
     <div class="modal-body qr-body">
       <div id="qrImage" class="qr-img"></div>
       <p id="qrNomor" class="qr-no"></p>
+      <div class="qr-link-row">
+        <input id="qrVerifyUrl" class="ctl" readonly placeholder="Tautan verifikasi">
+        <button id="btnCopyQrLink" class="btn btn-ghost btn-sm" type="button">Salin</button>
+      </div>
+      <p class="qr-hint">Pindai QR untuk membuka halaman verifikasi publik. Tautan aman dibagikan tanpa perlu login.</p>
       <button id="btnPrintQr" class="btn btn-ghost btn-full">Cetak QR</button>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost modal-close">Tutup</button></div>
@@ -428,9 +471,26 @@
   <div class="modal-panel modal-sm">
     <div class="modal-head"><h3>Ganti Password</h3><button class="icon-btn modal-close">&times;</button></div>
     <div class="modal-body">
-      <div class="field"><label>Password Lama</label><input type="password" id="gpLama" class="ctl"></div>
-      <div class="field"><label>Password Baru</label><input type="password" id="gpBaru" class="ctl"></div>
-      <div class="field"><label>Ulangi Password Baru</label><input type="password" id="gpUlangi" class="ctl"></div>
+      <div class="field"><label>Password Lama</label>
+        <div class="pass-wrap">
+          <input type="password" id="gpLama" class="ctl" autocomplete="current-password">
+          <button type="button" class="pass-toggle" data-pass-toggle="gpLama" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+      </div>
+      <div class="field"><label>Password Baru</label>
+        <div class="pass-wrap">
+          <input type="password" id="gpBaru" class="ctl" autocomplete="new-password">
+          <button type="button" class="pass-toggle" data-pass-toggle="gpBaru" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+        <div id="pwStrength" class="pw-strength"><div class="pw-bars"><i></i><i></i><i></i><i></i></div><span id="pwStrengthText">Minimal 6 karakter</span></div>
+      </div>
+      <div class="field"><label>Ulangi Password Baru</label>
+        <div class="pass-wrap">
+          <input type="password" id="gpUlangi" class="ctl" autocomplete="new-password">
+          <button type="button" class="pass-toggle" data-pass-toggle="gpUlangi" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+        <p id="pwMatch" class="field-hint"></p>
+      </div>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnGantiPassSubmit" class="btn btn-primary">Simpan</button></div>
   </div>
@@ -508,6 +568,41 @@
       <div class="profil-kop-preview" id="profilKopPreview"></div>
     </div>
     <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanProfil" class="btn btn-primary">Simpan Profil</button></div>
+  </div>
+</div>
+
+<!-- ============ PENCARIAN CEPAT (CTRL+K) ============ -->
+<div id="cmdPalette" class="cmdk" style="display:none" role="dialog" aria-modal="true" aria-label="Pencarian cepat">
+  <div class="cmdk-overlay" data-cmdk-close></div>
+  <div class="cmdk-panel">
+    <div class="cmdk-input-wrap">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="cmdkInput" type="text" placeholder="Cari arsip, menu, atau aksi…" autocomplete="off" spellcheck="false" aria-label="Pencarian cepat" aria-controls="cmdkResults">
+      <kbd>Esc</kbd>
+    </div>
+    <div id="cmdkResults" class="cmdk-results" role="listbox"></div>
+    <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> pilih</span><span><kbd>Enter</kbd> buka</span><span class="cmdk-scope" id="cmdkScope">Semua</span></div>
+  </div>
+</div>
+
+<!-- ============ PINTASAN KEYBOARD ============ -->
+<div id="modalShortcuts" class="modal" role="dialog" aria-modal="true" aria-hidden="true" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-panel modal-sm">
+    <div class="modal-head"><h3>Pintasan Keyboard</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-body">
+      <p class="shortcut-intro">Percepat pekerjaan tanpa berpindah ke mouse.</p>
+      <div class="shortcut-list">
+        <div class="shortcut-row"><span>Pencarian cepat arsip &amp; menu</span><span class="keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+        <div class="shortcut-row"><span>Fokus kolom pencarian di Data Arsip</span><span class="keys"><kbd>/</kbd></span></div>
+        <div class="shortcut-row"><span>Tambah arsip baru</span><span class="keys"><kbd>N</kbd></span></div>
+        <div class="shortcut-row"><span>Dashboard · Arsip · Agenda · Disposisi · Pinjam</span><span class="keys"><kbd>Alt</kbd><kbd>1</kbd>–<kbd>5</kbd></span></div>
+        <div class="shortcut-row"><span>Tutup dialog / panel</span><span class="keys"><kbd>Esc</kbd></span></div>
+        <div class="shortcut-row"><span>Tampilkan bantuan pintasan</span><span class="keys"><kbd>?</kbd></span></div>
+      </div>
+      <p class="shortcut-note">Pintasan nonaktif saat Anda sedang mengetik di kolom isian.</p>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Tutup</button></div>
   </div>
 </div>
 

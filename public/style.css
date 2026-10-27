@@ -712,3 +712,168 @@ body.modal-open{overflow:hidden}
   .rv{opacity:1;transform:none}
   .splash-bar-fill{width:100%}
 }
+
+/* ============================================================
+   FITUR KECIL YANG SERING TERLEWATKAN
+   ============================================================ */
+
+/* ---- LOGIN: tampil password, caps lock, ingat username ---- */
+.pass-wrap{position:relative}
+.pass-wrap .ctl,.pass-wrap input{padding-right:46px}
+.pass-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;border-radius:8px;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,color .15s}
+.pass-toggle:hover{background:var(--green-50);color:var(--green-700)}
+.pass-toggle.on{color:var(--green-700)}
+.caps-hint{margin-top:6px;font-size:12px;color:#a9792c;display:flex;align-items:center;gap:6px}
+.caps-hint::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0}
+.login-extra{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:-3px 0 16px}
+.remember-me{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none}
+.remember-me input{width:15px;height:15px;accent-color:var(--green-600);cursor:pointer}
+
+/* ---- TOPBAR: pencarian cepat ---- */
+.topbar-search{display:flex;align-items:center;gap:9px;margin-left:20px;padding:8px 11px;min-width:190px;max-width:320px;flex:1;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;color:var(--muted-2);font-size:13px;cursor:pointer;transition:border-color .15s,background .15s,color .15s,box-shadow .15s}
+.topbar-search:hover{border-color:var(--green-500);background:#fff;color:var(--muted);box-shadow:var(--sh-sm)}
+.topbar-search svg{flex-shrink:0}
+.topbar-search span{flex:1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+kbd{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--muted);background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px;line-height:1.5;white-space:nowrap}
+.topbar-search kbd{background:#fff}
+
+/* ---- COMMAND PALETTE ---- */
+.cmdk{position:fixed;inset:0;z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:9vh 18px 18px}
+.cmdk-overlay{position:absolute;inset:0;background:rgba(6,25,19,.46);backdrop-filter:blur(4px);opacity:0;transition:opacity .16s}
+.cmdk.open .cmdk-overlay{opacity:1}
+.cmdk-panel{position:relative;width:100%;max-width:620px;background:#fff;border-radius:16px;box-shadow:var(--sh-lg);overflow:hidden;opacity:0;transform:translateY(-10px) scale(.985);transition:opacity .16s,transform .2s cubic-bezier(.22,.8,.3,1);display:flex;flex-direction:column;max-height:76vh;will-change:opacity,transform}
+.cmdk.open .cmdk-panel{opacity:1;transform:none}
+.cmdk-input-wrap{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line-2);color:var(--green-700);flex-shrink:0}
+.cmdk-input-wrap input{flex:1;border:none;outline:none;background:transparent;font-size:15px;color:var(--ink);min-width:0}
+.cmdk-input-wrap input::placeholder{color:var(--muted-2)}
+.cmdk-results{overflow-y:auto;padding:8px;flex:1;min-height:80px}
+.cmdk-group{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted-2);padding:10px 10px 5px}
+.cmdk-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;cursor:pointer;border:1px solid transparent;transition:background .1s,border-color .1s}
+.cmdk-item.active{background:var(--green-50);border-color:var(--green-100)}
+.cmdk-ic{width:32px;height:32px;border-radius:8px;background:var(--green-100);color:var(--green-700);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:700;overflow:hidden}
+.cmdk-item-body{flex:1;min-width:0}
+.cmdk-item-body strong{display:block;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmdk-item-body span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmdk-item>kbd{flex-shrink:0}
+.cmdk-empty{padding:32px 16px;text-align:center;color:var(--muted-2);font-size:13px;line-height:1.6}
+.cmdk-foot{display:flex;align-items:center;gap:14px;padding:9px 16px;border-top:1px solid var(--line-2);background:var(--bg);font-size:11.5px;color:var(--muted);flex-shrink:0}
+.cmdk-foot span{display:inline-flex;align-items:center;gap:4px}
+.cmdk-scope{margin-left:auto;font-weight:700;color:var(--green-700);text-transform:uppercase;letter-spacing:.6px;font-size:10.5px}
+
+/* ---- PERLU PERHATIAN ---- */
+.attn-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:10px}
+.attn-item{display:flex;align-items:center;gap:11px;padding:12px 13px;border:1px solid var(--line-2);border-radius:12px;background:#fff;cursor:pointer;transition:transform .14s,box-shadow .18s,border-color .15s;text-align:left;font-family:inherit;font-size:inherit;color:inherit;width:100%}
+.attn-item:hover{transform:translateY(-1px);box-shadow:var(--sh-sm);border-color:var(--green-100)}
+.attn-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.attn-danger .attn-ic{background:#fbeef0;color:#c24b5e}
+.attn-warn .attn-ic{background:var(--gold-soft);color:#a9792c}
+.attn-info .attn-ic{background:#eef3fb;color:#3a6eb5}
+.attn-ok .attn-ic{background:var(--green-100);color:var(--green-700)}
+.attn-text{flex:1;min-width:0}
+.attn-text strong{display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attn-text span{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attn-count{margin-left:auto;font-family:var(--serif);font-size:20px;color:var(--green-900);line-height:1;flex-shrink:0}
+.attn-ok{grid-column:1/-1;cursor:default;background:var(--green-50);border-color:var(--green-100)}
+.attn-ok:hover{transform:none;box-shadow:none;border-color:var(--green-100)}
+.attn-ok .attn-text strong{color:var(--green-800)}
+
+/* ---- PILIHAN MASSAL ---- */
+.bulk-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:var(--green-900);color:#fff;border-radius:12px;margin-bottom:14px;position:sticky;top:80px;z-index:40;box-shadow:var(--sh-md)}
+.bulk-bar.show{display:flex}
+.bulk-bar strong{font-size:13.5px;font-weight:600}
+.bulk-bar .bulk-spacer{flex:1}
+.bulk-bar .btn{background:rgba(255,255,255,.12);color:#fff;border:none;box-shadow:none}
+.bulk-bar .btn:hover{background:rgba(255,255,255,.24);transform:none;box-shadow:none}
+.bulk-bar .bulk-clear{padding:6px 9px;background:transparent;color:rgba(255,255,255,.75);border:none;font-size:12px;font-weight:600;cursor:pointer;border-radius:7px}
+.bulk-bar .bulk-clear:hover{background:rgba(255,255,255,.12);color:#fff}
+.check-col{width:38px;text-align:center}
+.data-table th.check-col,.data-table td.check-col{padding-left:14px;padding-right:6px}
+.row-check,.check-all{width:16px;height:16px;accent-color:var(--green-600);cursor:pointer;vertical-align:middle}
+.data-table tbody tr.row-selected{background:rgba(42,160,126,.07)}
+.data-table tbody tr.row-selected:hover{background:rgba(42,160,126,.11)}
+
+/* ---- QR: tautan verifikasi ---- */
+.qr-link-row{display:flex;gap:6px;margin-bottom:7px}
+.qr-link-row .ctl{font-size:11.5px;padding:8px 10px;color:var(--muted);min-width:0}
+.qr-hint{font-size:11.5px;color:var(--muted-2);margin-bottom:13px;line-height:1.5;text-align:left}
+.qr-no{margin-bottom:12px}
+
+/* ---- DRAF ARSIP & PERINGATAN NOMOR ---- */
+.draft-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 13px;border-radius:10px;background:var(--gold-soft);border:1px solid #eadfbe;margin-bottom:16px;animation:fadeUp .25s both}
+.draft-banner-text{flex:1;min-width:160px}
+.draft-banner-text strong{display:block;font-size:13px;color:#7a5a1e}
+.draft-banner-text span{font-size:11.5px;color:#8a6d2f}
+.draft-banner-actions{display:flex;gap:6px}
+.field-warn{margin-top:6px;font-size:12px;color:#a9792c;line-height:1.45}
+.field-warn.bad{color:#b3261e}
+.field-hint{margin-top:6px;font-size:11.5px;color:var(--muted-2);line-height:1.45}
+.field-hint.ok{color:var(--green-600)}
+.field-hint.bad{color:#b3261e}
+
+/* ---- KEKUATAN PASSWORD ---- */
+.pw-strength{display:flex;align-items:center;gap:9px;margin-top:8px}
+.pw-bars{display:flex;gap:3px;flex:1}
+.pw-bars i{height:5px;flex:1;border-radius:3px;background:var(--line);transition:background .18s}
+.pw-strength.s1 .pw-bars i:nth-child(1){background:#c24b5e}
+.pw-strength.s2 .pw-bars i:nth-child(-n+2){background:#d68910}
+.pw-strength.s3 .pw-bars i:nth-child(-n+3){background:#3a9e7f}
+.pw-strength.s4 .pw-bars i{background:var(--green-600)}
+#pwStrengthText{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* ---- SALIN CEPAT ---- */
+.copy-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:none;border-radius:6px;background:transparent;color:var(--muted-2);cursor:pointer;margin-left:5px;vertical-align:middle;transition:background .15s,color .15s}
+.copy-btn:hover{background:var(--green-100);color:var(--green-700)}
+
+/* ---- PINTASAN KEYBOARD ---- */
+.shortcut-intro{font-size:13px;color:var(--muted);margin-bottom:14px}
+.shortcut-list{display:flex;flex-direction:column}
+.shortcut-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 2px;border-bottom:1px solid var(--line-2);font-size:12.5px;color:var(--ink-2)}
+.shortcut-row:last-child{border-bottom:none}
+.shortcut-row .keys{display:flex;gap:4px;align-items:center;flex-shrink:0}
+.shortcut-note{margin-top:14px;font-size:11.5px;color:var(--muted-2);line-height:1.5}
+
+/* ---- PENGINGAT BACKUP ---- */
+.backup-note{margin-top:14px;padding:10px 12px;border-radius:9px;background:var(--gold-soft);border:1px solid #eadfbe;color:#7a5a1e;font-size:11.5px;line-height:1.55;text-align:left;width:100%}
+.backup-note.ok{background:var(--green-50);border-color:var(--green-100);color:var(--green-800)}
+
+/* ---- HALAMAN VERIFIKASI PUBLIK ---- */
+.verify-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(800px circle at 15% 5%,rgba(42,160,126,.12),transparent 45%),radial-gradient(700px circle at 90% 95%,rgba(201,162,75,.14),transparent 50%),linear-gradient(160deg,var(--green-950),var(--green-800) 75%,var(--green-700))}
+.verify-card{width:100%;max-width:470px;background:#fff;border-radius:20px;box-shadow:var(--sh-lg);overflow:hidden;animation:fadeUp .45s cubic-bezier(.22,.8,.3,1) both}
+.verify-brand{display:flex;align-items:center;gap:12px;padding:19px 22px;background:linear-gradient(135deg,var(--green-950),var(--green-800));color:#fff}
+.verify-brand strong{display:block;font-family:var(--serif);font-size:16px;line-height:1.3}
+.verify-brand span{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.66)}
+.verify-body{padding:26px 24px 18px;text-align:center}
+.verify-loading{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:13.5px;padding:28px 0}
+.verify-spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--green-600);animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.verify-seal{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;background:var(--green-100);color:var(--green-700)}
+.verify-seal.bad{background:#fbeef0;color:#c24b5e}
+.verify-title{font-family:var(--serif);font-size:20px;color:var(--green-900);margin-bottom:4px}
+.verify-sub{font-size:12.5px;color:var(--muted);margin-bottom:18px;line-height:1.55}
+.verify-data{text-align:left;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.verify-data>div{display:grid;grid-template-columns:106px 1fr;gap:10px;padding:9px 13px;font-size:12.5px;border-bottom:1px solid var(--line-2)}
+.verify-data>div:last-child{border-bottom:none}
+.verify-data dt{color:var(--muted)}
+.verify-data dd{color:var(--ink);font-weight:500;min-width:0;overflow-wrap:anywhere}
+.verify-note{font-size:11.5px;color:var(--muted-2);line-height:1.55;background:var(--bg);border-radius:9px;padding:10px 12px;text-align:left}
+.verify-foot{padding:16px 24px 20px;border-top:1px solid var(--line-2);text-align:center}
+.verify-foot p{font-size:11px;color:var(--muted-2);margin-top:9px;line-height:1.5}
+
+/* ---- RESPONSIF FITUR BARU ---- */
+@media(max-width:1100px){
+  .topbar-search{max-width:230px;min-width:150px}
+  .topbar-search span{display:none}
+  .topbar-search{padding:9px 10px;flex:0 0 auto}
+}
+@media(max-width:900px){
+  .topbar-search{display:none}
+  .bulk-bar{top:72px}
+  .verify-wrap{padding:14px}
+}
+@media(max-width:560px){
+  .cmdk{padding:5vh 10px 10px}
+  .cmdk-foot span:nth-child(1){display:none}
+  .bulk-bar{position:static}
+  .login-extra{margin-top:-2px}
+}
