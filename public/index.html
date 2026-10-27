@@ -439,19 +439,47 @@
   <div class="modal-overlay"></div>
   <div class="modal-panel modal-sm">
     <div class="modal-head"><h3 id="userTitle">Tambah Pengguna</h3><button class="icon-btn modal-close">&times;</button></div>
+    <div class="modal-tabs" id="userTabs" style="display:none">
+      <button type="button" class="mtab active" data-utab="edit">Data Pengguna</button>
+      <button type="button" class="mtab" data-utab="reset">Reset Password</button>
+    </div>
     <div class="modal-body">
       <input type="hidden" id="userId">
-      <div class="field"><label>Username</label><input type="text" id="uUsername" class="ctl" placeholder="Username"></div>
-      <div class="field"><label>Nama Lengkap</label><input type="text" id="uNama" class="ctl" placeholder="Nama lengkap"></div>
-      <div class="field"><label>Role</label>
-        <select id="uRole" class="ctl"><option value="staff">Staf</option><option value="admin">Administrator</option><option value="kepala">Kepala</option></select>
+      <div id="userPaneEdit">
+        <div class="field"><label>Username</label><input type="text" id="uUsername" class="ctl" placeholder="Username"></div>
+        <div class="field"><label>Nama Lengkap</label><input type="text" id="uNama" class="ctl" placeholder="Nama lengkap"></div>
+        <div class="field"><label>Role</label>
+          <select id="uRole" class="ctl"><option value="staff">Staf</option><option value="admin">Administrator</option><option value="kepala">Kepala</option></select>
+        </div>
+        <div class="field" id="uPassField"><label>Password <span class="req">*</span></label><input type="password" id="uPassword" class="ctl" placeholder="Minimal 6 karakter"></div>
+        <div class="field" id="uAktifField" style="display:none">
+          <label>Status</label><select id="uAktif" class="ctl"><option value="1">Aktif</option><option value="0">Nonaktif</option></select>
+        </div>
       </div>
-      <div class="field" id="uPassField"><label>Password <span class="req">*</span></label><input type="password" id="uPassword" class="ctl" placeholder="Minimal 6 karakter"></div>
-      <div class="field" id="uAktifField" style="display:none">
-        <label>Status</label><select id="uAktif" class="ctl"><option value="1">Aktif</option><option value="0">Nonaktif</option></select>
+      <div id="userPaneReset" style="display:none">
+        <div class="reset-user">
+          <div class="reset-avatar" id="resetAvatar">?</div>
+          <div class="reset-user-meta"><strong id="resetNama">—</strong><span id="resetUsername">—</span></div>
+          <span class="chip" id="resetRoleChip">Staf</span>
+        </div>
+        <div class="field"><label>Password Baru <span class="req">*</span></label>
+          <div class="pass-wrap">
+            <input type="password" id="rpBaru" class="ctl" autocomplete="new-password" placeholder="Minimal 6 karakter">
+            <button type="button" class="pass-toggle" data-pass-toggle="rpBaru" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
+          <div id="rpStrength" class="pw-strength"><div class="pw-bars"><i></i><i></i><i></i><i></i></div><span id="rpStrengthText">Minimal 6 karakter</span></div>
+        </div>
+        <div class="field"><label>Ulangi Password Baru <span class="req">*</span></label>
+          <div class="pass-wrap">
+            <input type="password" id="rpUlangi" class="ctl" autocomplete="new-password" placeholder="Ulangi password baru">
+            <button type="button" class="pass-toggle" data-pass-toggle="rpUlangi" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
+          <p id="rpMatch" class="field-hint"></p>
+        </div>
+        <p class="field-hint reset-note">Pengguna akan memakai password baru ini pada sesi login berikutnya.</p>
       </div>
     </div>
-    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanUser" class="btn btn-primary">Simpan</button></div>
+    <div class="modal-foot"><button class="btn btn-ghost modal-close">Batal</button><button id="btnSimpanUser" class="btn btn-primary">Simpan</button><button id="btnResetPassSubmit" class="btn btn-primary" style="display:none">Reset Password</button></div>
   </div>
 </div>
 

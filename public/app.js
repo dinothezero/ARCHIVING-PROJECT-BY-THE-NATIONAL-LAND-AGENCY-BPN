@@ -457,7 +457,8 @@ function openModal(id){
   m.setAttribute('aria-hidden','false');
   document.body.classList.add('modal-open');
   requestAnimationFrame(()=>m.classList.add('open'));
-  const f=m.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+  const f=[...m.querySelectorAll('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])')].find(el=>el.getClientRects().length>0)
+    || [...m.querySelectorAll('button:not([disabled])')].find(el=>el.getClientRects().length>0);
   if(f) setTimeout(()=>{ try{ f.focus({ preventScroll:true }); }catch(e){} }, 140);
 }
 function closeModal(id){
@@ -583,7 +584,8 @@ function decorateTableCards(){
 }
 let tableCardTimer=null;
 new MutationObserver(()=>{ if(tableCardTimer) return; tableCardTimer=setTimeout(()=>{ tableCardTimer=null; decorateTableCards(); },80); }).observe(document.body,{childList:true,subtree:true});
-function renderHBar(id,data,lab,val,cls){ const el=document.getElementById(id); if(!el)return; if(!data||!data.length){el.innerHTML='<div class="hbar-row-empty">Belum ada data</div>';return;} const max=Math.max(...data.map(val),1);
+function renderHBar(id,data,lab,val,cls){ const el=document.getElementById(id); if(!el)return; const empty=!data||!data.length; el.classList.toggle('is-empty',empty);
+  if(empty){el.innerHTML='<div class="hbar-row-empty">Belum ada data</div>';return;} const max=Math.max(...data.map(val),1);
   el.innerHTML=data.map(d=>{const pct=Math.round(val(d)/max*100);return `<div class="hbar"><div class="hbar-label" title="${esc(lab(d))}">${esc(lab(d))}</div><div class="hbar-track"><div class="hbar-fill ${cls||''} animate" data-w="${Math.max(pct,2)}%"></div></div><div class="hbar-value">${val(d)}</div></div>`;}).join('');
   const fills=el.querySelectorAll('.hbar-fill'); requestAnimationFrame(()=>{ fills.forEach(f=>{ const w=f.dataset.w; f.style.transition='width .7s cubic-bezier(.22,.8,.3,1)'; requestAnimationFrame(()=>{ f.style.width=w||'2%'; }); }); });
 }
@@ -605,44 +607,62 @@ function renderDonut(elId, legendId, data, lab, val){
 async function loadDashboard(){
   const sec=document.getElementById('page-dashboard');
   sec.innerHTML=`<div class="dash-hero rv">
+      <span class="hero-glow hero-glow-a"></span><span class="hero-glow hero-glow-b"></span>
       <div class="dash-hero-left">
+        <span class="hero-eyebrow"><span class="hero-dot"></span>Ringkasan Hari Ini</span>
         <h3 id="dhGreet">${greetingJam()}, ${esc((state.currentUser&&state.currentUser.nama)||'')}</h3>
         <div class="dh-date">${namaHariTanggal(new Date())}</div>
         <div class="dh-msg" id="dhMsg">Ringkasan arsip, disposisi, peminjaman, dan agenda kegiatan kantor Anda hari ini.</div>
+        <div class="hero-actions">
+          <button type="button" class="hero-btn hero-btn-gold" onclick="openTambahArsip()">${ICONS.plus}<span>Arsip Baru</span></button>
+          <button type="button" class="hero-btn" onclick="showPage('laporan')">Lihat Laporan</button>
+        </div>
       </div>
       <div class="dash-hero-right">
-        <div class="hero-chip"><strong id="hcKeg">0</strong><span>Kegiatan Hari Ini</span></div>
-        <div class="hero-chip"><strong id="hcPinjam">0</strong><span>Arsip Dipinjam</span></div>
-        <div class="hero-chip"><strong id="hcAgenda">0</strong><span>Agenda Bulan Ini</span></div>
+        <div class="hero-chip"><span class="hero-chip-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><div class="hero-chip-text"><strong id="hcKeg">0</strong><span>Kegiatan Hari Ini</span></div></div>
+        <div class="hero-chip"><span class="hero-chip-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg></span><div class="hero-chip-text"><strong id="hcPinjam">0</strong><span>Arsip Dipinjam</span></div></div>
+        <div class="hero-chip"><span class="hero-chip-ic">${ICONS.grid}</span><div class="hero-chip-text"><strong id="hcAgenda">0</strong><span>Agenda Bulan Ini</span></div></div>
       </div>
     </div>
     <div class="stats-grid rv">
-      <div class="stat-card"><div class="stat-icon stat-ic-total"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="stat-info"><span class="stat-label">Total Arsip</span><strong class="stat-number" id="sTotal">0</strong><span class="stat-caption">seluruh dokumen</span></div></div>
-      <div class="stat-card"><div class="stat-icon stat-ic-aktif"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 12l2 2 3.5-4"/></svg></div><div class="stat-info"><span class="stat-label">Aktif</span><strong class="stat-number" id="sAktif">0</strong><span class="stat-caption">penanganan</span></div></div>
-      <div class="stat-card"><div class="stat-icon stat-ic-arsip2"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div><div class="stat-info"><span class="stat-label">Diarsipkan</span><strong class="stat-number" id="sArsip">0</strong><span class="stat-caption">tersimpan</span></div></div>
-      <div class="stat-card"><div class="stat-icon stat-ic-pinjam"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-info"><span class="stat-label">Dipinjam</span><strong class="stat-number" id="sPinjam">0</strong><span class="stat-caption">peminjaman</span></div></div>
+      <article class="stat-card sc-green">
+        <div class="stat-top"><span class="stat-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="stat-badge">Keseluruhan</span></div>
+        <div class="stat-info"><strong class="stat-number" id="sTotal">0</strong><span class="stat-label">Total Arsip</span><span class="stat-caption">seluruh dokumen</span></div>
+      </article>
+      <article class="stat-card sc-gold">
+        <div class="stat-top"><span class="stat-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.5 12l2 2 3.5-4"/></svg></span><span class="stat-badge">Berjalan</span></div>
+        <div class="stat-info"><strong class="stat-number" id="sAktif">0</strong><span class="stat-label">Aktif</span><span class="stat-caption">dalam penanganan</span></div>
+      </article>
+      <article class="stat-card sc-blue">
+        <div class="stat-top"><span class="stat-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span class="stat-badge">Tersimpan</span></div>
+        <div class="stat-info"><strong class="stat-number" id="sArsip">0</strong><span class="stat-label">Diarsipkan</span><span class="stat-caption">dalam penyimpanan</span></div>
+      </article>
+      <article class="stat-card sc-rose">
+        <div class="stat-top"><span class="stat-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span><span class="stat-badge">Keluar</span></div>
+        <div class="stat-info"><strong class="stat-number" id="sPinjam">0</strong><span class="stat-label">Dipinjam</span><span class="stat-caption">peminjaman aktif</span></div>
+      </article>
     </div>
     <div class="stat-mini-grid rv">
-      <div class="stat-mini"><div class="sm-num" id="smSampah">0</div><div class="sm-label">Di Tempat Sampah</div></div>
-      <div class="stat-mini"><div class="sm-num" id="smHilang">0</div><div class="sm-label">Hilang</div></div>
-      <div class="stat-mini"><div class="sm-num" id="smRusak">0</div><div class="sm-label">Rusak</div></div>
+      <div class="stat-mini dash-mini"><span class="sm-ic sm-gray">${ICONS.trash}</span><div class="sm-body"><div class="sm-num" id="smSampah">0</div><div class="sm-label">Di Tempat Sampah</div></div></div>
+      <div class="stat-mini dash-mini"><span class="sm-ic sm-dark">${ICONS.warn}</span><div class="sm-body"><div class="sm-num" id="smHilang">0</div><div class="sm-label">Hilang</div></div></div>
+      <div class="stat-mini dash-mini"><span class="sm-ic sm-violet">${ICONS.warn}</span><div class="sm-body"><div class="sm-num" id="smRusak">0</div><div class="sm-label">Rusak</div></div></div>
     </div>
     <div class="panel rv" style="margin-bottom:24px">
-      <div class="panel-head"><div><h3 class="panel-title">Perlu Perhatian</h3><p class="panel-sub">Hal yang sebaiknya ditindaklanjuti hari ini</p></div></div>
+      <div class="panel-head"><div class="ph-left"><span class="ph-ic ph-gold">${ICONS.bell}</span><div><h3 class="panel-title">Perlu Perhatian</h3><p class="panel-sub">Hal yang sebaiknya ditindaklanjuti hari ini</p></div></div></div>
       <div class="panel-body"><div class="attn-body" id="dashAttention"></div></div>
     </div>
     <div class="dash-grid-3">
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Distribusi Status</h3><p class="panel-sub">Komposisi berdasarkan status</p></div></div><div class="panel-body" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap"><div class="donut-wrap" id="donutStatus"></div><div class="donut-legend" id="lgStatus"></div></div></div>
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Arsip per Kategori</h3><p class="panel-sub">Distribusi berdasarkan jenis</p></div></div><div class="panel-body"><div id="chartKategori" class="hbar-list"></div></div></div>
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Arsip 12 Bulan Terakhir</h3><p class="panel-sub">Tren masuk tiap bulan</p></div></div><div class="panel-body"><div id="chartBulan" class="hbar-list"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-green"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span><div><h3 class="panel-title">Distribusi Status</h3><p class="panel-sub">Komposisi berdasarkan status</p></div></div></div><div class="panel-body donut-body"><div class="donut-wrap" id="donutStatus"></div><div class="donut-legend" id="lgStatus"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-blue"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span><div><h3 class="panel-title">Arsip per Kategori</h3><p class="panel-sub">Distribusi berdasarkan jenis</p></div></div><button type="button" class="panel-link" onclick="showPage('arsip')">Lihat arsip</button></div><div class="panel-body"><div id="chartKategori" class="hbar-list"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-gold"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></span><div><h3 class="panel-title">Arsip 12 Bulan Terakhir</h3><p class="panel-sub">Tren masuk tiap bulan</p></div></div></div><div class="panel-body"><div id="chartBulan" class="hbar-list"></div></div></div>
     </div>
     <div class="dash-grid">
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Agenda Kegiatan Hari Ini</h3><p class="panel-sub">Jadwal yang terjadwal hari ini</p></div></div><div class="panel-body"><div id="dashKegiatan" class="chip-list"></div></div></div>
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Peminjaman Aktif</h3><p class="panel-sub">Prioritas berdasarkan jatuh tempo</p></div></div><div class="panel-body"><div id="dashPinjam" class="list-rows"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-green"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><div><h3 class="panel-title">Agenda Kegiatan Hari Ini</h3><p class="panel-sub">Jadwal yang terjadwal hari ini</p></div></div><button type="button" class="panel-link" onclick="showPage('kalender')">Kalender</button></div><div class="panel-body"><div id="dashKegiatan" class="chip-list"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-rose">${ICONS.clock}</span><div><h3 class="panel-title">Peminjaman Aktif</h3><p class="panel-sub">Prioritas berdasarkan jatuh tempo</p></div></div><button type="button" class="panel-link" onclick="showPage('peminjaman')">Lihat semua</button></div><div class="panel-body"><div id="dashPinjam" class="list-rows"></div></div></div>
     </div>
     <div class="dash-grid">
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Aktivitas Terbaru</h3><p class="panel-sub">Riwayat terakhir pengguna</p></div></div><div class="panel-body"><div id="dashAktivitas" class="feed-list"></div></div></div>
-      <div class="panel rv"><div class="panel-head"><div><h3 class="panel-title">Arsip Terbaru</h3><p class="panel-sub">Dokumen paling baru dimasukkan</p></div></div><div class="panel-body"><div id="dashArsipBaru" class="list-rows"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-blue"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><div><h3 class="panel-title">Aktivitas Terbaru</h3><p class="panel-sub">Riwayat terakhir pengguna</p></div></div>${isAdmin()?`<button type="button" class="panel-link" onclick="showPage('log')">Lihat log</button>`:''}</div><div class="panel-body"><div id="dashAktivitas" class="feed-list"></div></div></div>
+      <div class="panel rv"><div class="panel-head"><div class="ph-left"><span class="ph-ic ph-green"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><div><h3 class="panel-title">Arsip Terbaru</h3><p class="panel-sub">Dokumen paling baru dimasukkan</p></div></div><button type="button" class="panel-link" onclick="showPage('arsip')">Lihat arsip</button></div><div class="panel-body"><div id="dashArsipBaru" class="list-rows"></div></div></div>
     </div>`;
   observeReveals(sec);
   try{
@@ -1184,20 +1204,66 @@ document.getElementById('btnSimpanMaster').addEventListener('click',async()=>{ c
 });
 
 /* ============ USERS ============ */
+const ROLE_NAMES={admin:'Administrator',staff:'Staf',kepala:'Kepala'};
 async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('/api/users'))||[]; const tb=document.getElementById('usersBody'); if(!tb)return; state.userMap={}; d.forEach(u=>state.userMap[u.id]=u);
-  const roleNames={admin:'Administrator',staff:'Staf',kepala:'Kepala'};
-  tb.innerHTML=d.map(u=>`<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip">${roleNames[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
+  tb.innerHTML=d.map(u=>`<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
   </div></td></tr>`).join('');
   }catch(e){ toast(e.message,'error'); } }
 function buildUsersLayout(){ const sec=document.getElementById('page-users'); if(sec.innerHTML.trim())return; sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`; }
+function resetUserPasswordFields(){
+  ['rpBaru','rpUlangi'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.value=''; el.type='password'; } });
+  document.querySelectorAll('#userPaneReset .pass-toggle').forEach(b=>{ b.classList.remove('on'); b.setAttribute('aria-pressed','false'); b.title='Tampilkan password'; });
+  updateRpStrength();
+}
+function setUserTab(tab){
+  const id=document.getElementById('userId').value;
+  const editing=!!id;
+  const useReset=editing && tab==='reset';
+  document.getElementById('userTabs').style.display=editing?'flex':'none';
+  document.querySelectorAll('#userTabs .mtab').forEach(b=>b.classList.toggle('active',b.dataset.utab===(useReset?'reset':'edit')));
+  document.getElementById('userPaneEdit').style.display=useReset?'none':'block';
+  document.getElementById('userPaneReset').style.display=useReset?'block':'none';
+  document.getElementById('btnSimpanUser').style.display=useReset?'none':'inline-flex';
+  document.getElementById('btnResetPassSubmit').style.display=useReset?'inline-flex':'none';
+  document.getElementById('userTitle').textContent=!editing?'Tambah Pengguna':(useReset?'Reset Password':'Edit Pengguna');
+  if(useReset){
+    const u=state.userMap[id];
+    if(u){
+      document.getElementById('resetAvatar').textContent=(u.nama||'?').charAt(0).toUpperCase();
+      document.getElementById('resetNama').textContent=u.nama||'—';
+      document.getElementById('resetUsername').textContent='@'+(u.username||'');
+      document.getElementById('resetRoleChip').textContent=ROLE_NAMES[u.role]||u.role||'Staf';
+    }
+    resetUserPasswordFields();
+  }
+}
+function updateRpStrength(){
+  const box=document.getElementById('rpStrength'), txt=document.getElementById('rpStrengthText');
+  const baru=document.getElementById('rpBaru'), ulangi=document.getElementById('rpUlangi'), match=document.getElementById('rpMatch');
+  if(!box||!txt||!baru) return;
+  const v=baru.value, sc=passwordScore(v);
+  box.className='pw-strength'+(sc?' s'+sc:'');
+  if(!v) txt.textContent='Minimal 6 karakter';
+  else if(v.length<6) txt.textContent='Terlalu pendek (minimal 6)';
+  else txt.textContent=['','Lemah','Cukup','Kuat','Sangat kuat'][sc]||'';
+  if(!match) return;
+  const u=ulangi?ulangi.value:'';
+  if(!u){ match.textContent=''; match.className='field-hint'; }
+  else if(u===v){ match.textContent='Password cocok'; match.className='field-hint ok'; }
+  else { match.textContent='Password belum sama'; match.className='field-hint bad'; }
+}
+document.getElementById('userTabs').addEventListener('click',e=>{ const b=e.target.closest('.mtab'); if(b) setUserTab(b.dataset.utab); });
+document.getElementById('rpBaru').addEventListener('input',updateRpStrength);
+document.getElementById('rpUlangi').addEventListener('input',updateRpStrength);
 function openTambahUser(){
   document.getElementById('userId').value='';
   const un=document.getElementById('uUsername'); un.value=''; un.disabled=false;
-  document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff'; document.getElementById('uPassword').value='';
-  document.getElementById('userTitle').textContent='Tambah Pengguna';
+  document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff';
+  const pw=document.getElementById('uPassword'); pw.value=''; pw.type='password';
   document.getElementById('uPassField').style.display='block'; document.getElementById('uAktifField').style.display='none';
+  setUserTab('edit');
   openModal('modalUser');
 }
 window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
@@ -1205,12 +1271,20 @@ window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
   const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
   document.getElementById('uAktif').value=String(u.aktif);
-  document.getElementById('userTitle').textContent='Edit Pengguna';
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
+  setUserTab('edit');
   openModal('modalUser');
 };
-window.resetPass=async function(id){ const p=prompt('Password baru (min 6 karakter):'); if(!p) return; if(p.length<6){ toast('Password minimal 6 karakter','error'); return; }
-  try{ await api('/api/users/'+id+'/reset-password',{method:'POST',body:{password:p}}); toast('Password direset','success'); loadUsersPage(); }catch(e){ toast(e.message,'error'); } };
+window.resetPass=function(id){ const u=state.userMap[id]; if(!u)return;
+  document.getElementById('userId').value=u.id;
+  const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
+  document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
+  document.getElementById('uAktif').value=String(u.aktif);
+  document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
+  setUserTab('reset');
+  openModal('modalUser');
+  setTimeout(()=>{ try{ document.getElementById('rpBaru').focus({preventScroll:true}); }catch(e){} },160);
+};
 document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
   const id=document.getElementById('userId').value;
   const nama=document.getElementById('uNama').value.trim();
@@ -1231,6 +1305,17 @@ document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
     state.userList=null;
     closeModal('modalUser'); loadUsersPage();
   }catch(e){ toast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+});
+document.getElementById('btnResetPassSubmit').addEventListener('click',async()=>{
+  const id=document.getElementById('userId').value;
+  if(!id){ toast('Pilih pengguna terlebih dahulu','error'); return; }
+  const baru=document.getElementById('rpBaru').value, ulangi=document.getElementById('rpUlangi').value;
+  if(baru.length<6){ toast('Password minimal 6 karakter','error'); return; }
+  if(baru!==ulangi){ toast('Konfirmasi password belum sama','error'); return; }
+  const btn=document.getElementById('btnResetPassSubmit'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
+  try{ await api('/api/users/'+id+'/reset-password',{method:'POST',body:{password:baru}}); toast('Password pengguna berhasil direset','success'); closeModal('modalUser'); }
+  catch(e){ toast(e.message,'error'); }
   finally{ btn.disabled=false; btn.textContent=old; }
 });
 window.initUsersPage=buildUsersLayout;
