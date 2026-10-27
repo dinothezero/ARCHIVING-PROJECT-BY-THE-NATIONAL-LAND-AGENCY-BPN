@@ -15,11 +15,22 @@ const idLok = {}; q.getAllLokasi.all().forEach(l => idLok[l.kode] = l.id);
 
 const kodeQrFromNomor = n => `${n}|seed|${Math.floor(Math.random()*9999)}`;
 
+let dipinjamId = null;
 for (const s of samples) {
   const kode = s.kata;
   const nomor = generateNomorArsip(kode);
-  q.insertArsip.run(nomor, q.getKategoriByKode.get(kode).id, s.judul, s.no, s.ts, s.ta, s.peng, idInst[s.inst] || null, s.pen, idUnit[s.unit] || null,
+  const res = q.insertArsip.run(nomor, q.getKategoriByKode.get(kode).id, s.judul, s.no, s.ts, s.ta, s.peng, idInst[s.inst] || null, s.pen, idUnit[s.unit] || null,
     s.perihal, s.ring, s.st, s.lok, idLok[s.lok] || null, kodeQrFromNomor(nomor), 1);
+  if (s.st === 'dipinjam') dipinjamId = Number(res.lastInsertRowid);
+}
+
+// Catatan peminjaman untuk arsip contoh yang berstatus dipinjam agar dashboard konsisten.
+if (dipinjamId) {
+  const now = new Date();
+  const due = new Date(now.getTime() + 7 * 86400000);
+  const ymd = d => d.toISOString().slice(0, 10);
+  q.insertPeminjaman.run(dipinjamId, 'Bupati', idUnit['PENET'] || null, 'Permintaan data aset tanah',
+    ymd(now), ymd(due), null, 'dipinjam', 'Contoh peminjaman awal', 1);
 }
 
 console.log('Seed data berhasil:', samples.length, 'arsip contoh.');

@@ -132,7 +132,6 @@ router.post('/login', (req, res) => {
     req.session.userId = user.id;
     req.session.userRole = user.role;
     req.session.userName = user.nama;
-    q.buatNotifikasi(user.id, 'Login berhasil', `Selamat datang kembali, ${user.nama}`, 'info', null, null);
     res.json({ user: { id: user.id, username: user.username, nama: user.nama, role: user.role } });
   });
 });

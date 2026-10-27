@@ -121,7 +121,8 @@ function toast(message, type = 'info', ms = 3200) {
 function formatDate(d) { if (!d) return '-'; const p = String(d).split('-'); if (p.length !== 3) return d; const n=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']; return `${p[2]} ${n[parseInt(p[1])-1]} ${p[0]}`; }
 function formatBytes(b) { if (!b) return '-'; if (b < 1024) return b+' B'; if (b < 1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 function formatDateTime(dt) { if (!dt) return '-'; const d = parseServerDate(dt); if (isNaN(d)) return dt; return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
-const STATUS_LABEL = { aktif:'Aktif', arsip:'Arsip', dipinjam:'Dipinjam', hilang:'Hilang', rusak:'Rusak' };
+const STATUS_LABEL = { aktif:'Aktif', arsip:'Arsip', dipinjam:'Dipinjam', terlambat:'Terlambat', dikembalikan:'Dikembalikan', hilang:'Hilang', rusak:'Rusak' };
+const DISP_STATUS_LABEL = { proses:'Proses', diterima:'Diterima', selesai:'Selesai', ditolak:'Ditolak' };
 
 function debounce(fn, ms) {
   let t = null;
@@ -288,6 +289,7 @@ document.getElementById('loginForm').addEventListener('submit', async e=>{
       else localStorage.removeItem('bpnarsip.rememberUser');
     }catch(e){}
     document.getElementById('loginPass').value='';
+    try{ const settings=await api('/api/settings'); if(settings){ state.settings=settings; applySettings(settings); } }catch(e){}
     showApp(data.user); showPage('dashboard');
     toast('Selamat datang, '+data.user.nama+'!','success');
   }catch(err){
@@ -496,9 +498,9 @@ async function ensureDropdowns(){
     fillSelect('arsipUnit',u,x=>`${x.kode} — ${x.nama}`);
     fillSelect('arsipLokasiSel',l,x=>`${x.kode} — ${x.nama}`);
     fillSelect('pinjamUnit',u,x=>`${x.kode} — ${x.nama}`);
-    fillSelect('filterKategori',k,x=>`${x.kode} — ${x.nama}`);
-    fillSelect('filterInstansi',i,x=>x.nama);
-    fillSelect('filterLokasi',l,x=>`${x.kode} — ${x.nama}`);
+    fillSelect('filterKategori',k,x=>`${x.kode} — ${x.nama}`,'Semua Kategori');
+    fillSelect('filterInstansi',i,x=>x.nama,'Semua Instansi');
+    fillSelect('filterLokasi',l,x=>`${x.kode} — ${x.nama}`,'Semua Lokasi');
   }catch(e){ toast(e.message,'error'); }
 }
 function fillSelect(id, arr, labelFn, placeholder=''){ const sel=document.getElementById(id); if(!sel) return; const cur=sel.value; sel.innerHTML=`<option value="">${placeholder||'— Pilih —'}</option>`+arr.map(x=>`<option value="${x.id}">${esc(labelFn(x))}</option>`).join(''); if(cur) sel.value=cur; }
@@ -562,6 +564,25 @@ function startClock(){
 }
 const revealObserver=new IntersectionObserver(entries=>{ entries.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); revealObserver.unobserve(en.target); } }); },{threshold:.08});
 function observeReveals(root){ (root||document).querySelectorAll('.rv:not(.in)').forEach(el=>revealObserver.observe(el)); }
+
+/* Tabel data jadi kartu berlabel di layar kecil */
+const TABLE_CARD_PAGES=['users','kategori','peminjaman','disposisi','buku-agenda','laporan','sampah','log'];
+function decorateTableCards(){
+  document.querySelectorAll('section[id^="page-"] .data-table').forEach(tbl=>{
+    const sec=tbl.closest('section'); const page=sec?sec.id.replace(/^page-/,''):'';
+    if(!TABLE_CARD_PAGES.includes(page)) return;
+    const ths=[...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    tbl.classList.add('table-stack');
+    tbl.querySelectorAll('tbody tr').forEach(tr=>{
+      [...tr.children].forEach((td,i)=>{
+        if(td.colSpan>1){ td.setAttribute('data-label',''); return; }
+        if(!td.getAttribute('data-label')) td.setAttribute('data-label',ths[i]||'');
+      });
+    });
+  });
+}
+let tableCardTimer=null;
+new MutationObserver(()=>{ if(tableCardTimer) return; tableCardTimer=setTimeout(()=>{ tableCardTimer=null; decorateTableCards(); },80); }).observe(document.body,{childList:true,subtree:true});
 function renderHBar(id,data,lab,val,cls){ const el=document.getElementById(id); if(!el)return; if(!data||!data.length){el.innerHTML='<div class="hbar-row-empty">Belum ada data</div>';return;} const max=Math.max(...data.map(val),1);
   el.innerHTML=data.map(d=>{const pct=Math.round(val(d)/max*100);return `<div class="hbar"><div class="hbar-label" title="${esc(lab(d))}">${esc(lab(d))}</div><div class="hbar-track"><div class="hbar-fill ${cls||''} animate" data-w="${Math.max(pct,2)}%"></div></div><div class="hbar-value">${val(d)}</div></div>`;}).join('');
   const fills=el.querySelectorAll('.hbar-fill'); requestAnimationFrame(()=>{ fills.forEach(f=>{ const w=f.dataset.w; f.style.transition='width .7s cubic-bezier(.22,.8,.3,1)'; requestAnimationFrame(()=>{ f.style.width=w||'2%'; }); }); });
@@ -591,7 +612,7 @@ async function loadDashboard(){
       </div>
       <div class="dash-hero-right">
         <div class="hero-chip"><strong id="hcKeg">0</strong><span>Kegiatan Hari Ini</span></div>
-        <div class="hero-chip"><strong id="hcPinjam">0</strong><span>Peminjaman Aktif</span></div>
+        <div class="hero-chip"><strong id="hcPinjam">0</strong><span>Arsip Dipinjam</span></div>
         <div class="hero-chip"><strong id="hcAgenda">0</strong><span>Agenda Bulan Ini</span></div>
       </div>
     </div>
@@ -628,7 +649,7 @@ async function loadDashboard(){
     const d=await api('/api/dashboard'); const s=d.stats;
     countUp(document.getElementById('sTotal'), s.total); countUp(document.getElementById('sAktif'), s.aktif); countUp(document.getElementById('sArsip'), s.diarsipkan); countUp(document.getElementById('sPinjam'), s.dipinjam);
     countUp(document.getElementById('smSampah'), s.sampah); countUp(document.getElementById('smHilang'), s.hilang); countUp(document.getElementById('smRusak'), s.rusak);
-    countUp(document.getElementById('hcKeg'), (d.kegiatanHariIni||[]).length); countUp(document.getElementById('hcPinjam'), (d.pinjamanAktif||[]).length); countUp(document.getElementById('hcAgenda'), d.agendaCount||0);
+    countUp(document.getElementById('hcKeg'), (d.kegiatanHariIni||[]).length); countUp(document.getElementById('hcPinjam'), (d.stats&&d.stats.dipinjam)||0); countUp(document.getElementById('hcAgenda'), d.agendaCount||0);
     renderHBar('chartKategori',d.byKategori,x=>x.nama,x=>x.jumlah);
     renderHBar('chartBulan',d.byBulan,x=>formatBulan(x.bulan),x=>x.jumlah,'gold');
     renderDonut('donutStatus','lgStatus',d.byStatus,x=>STATUS_LABEL[x.status]||x.status,x=>x.jumlah);
@@ -710,9 +731,9 @@ function buildArsipLayout(){
     <div class="table-foot"><span class="table-info" id="arsipInfo"></span><div class="pagination" id="arsipPagination"></div></div></div>`;
   document.getElementById('btnFilter').addEventListener('click',()=>{ applyFilter(); });
   document.getElementById('searchInput').addEventListener('keypress',e=>{ if(e.key==='Enter') applyFilter(); });
-  fillSelect('filterKategori',Object.values(state.kategoriMap),x=>`${x.kode} — ${x.nama}`);
-  fillSelect('filterInstansi',Object.values(state.instansiMap),x=>x.nama);
-  fillSelect('filterLokasi',Object.values(state.lokasiMap),x=>`${x.kode} — ${x.nama}`);
+  fillSelect('filterKategori',Object.values(state.kategoriMap),x=>`${x.kode} — ${x.nama}`,'Semua Kategori');
+  fillSelect('filterInstansi',Object.values(state.instansiMap),x=>x.nama,'Semua Instansi');
+  fillSelect('filterLokasi',Object.values(state.lokasiMap),x=>`${x.kode} — ${x.nama}`,'Semua Lokasi');
   document.getElementById('bulkCsv').addEventListener('click',exportSelectedCsv);
   document.getElementById('bulkLabel').addEventListener('click',printSelectedLabels);
   document.getElementById('bulkClear').addEventListener('click',()=>{ state.selectedArsip.clear(); loadArsip(); });
@@ -971,8 +992,8 @@ window.openDetail=async function(id){
     const d=await api('/api/arsip/'+id); const can=canManage();
     state.detailId=d.id;
     const lampiran=Array.isArray(d.lampiran)?d.lampiran:[];
-    const disp=d.disposisi&&d.disposisi.length?d.disposisi.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.instruksi||'Disposisi')}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_disposisi)} · ${esc(x.dari_nama||'-')} → ${esc(x.kepada_nama||'-')}</div></div><span class="badge badge-${x.status}">${esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada disposisi</div>';
-    const pinj=d.peminjaman&&d.peminjaman.length?d.peminjaman.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.peminjam)}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_pinjam)} → ${formatDate(x.tanggal_jatuh_tempo)}${x.tanggal_kembali?' · kembali '+formatDate(x.tanggal_kembali):''}</div></div><span class="badge badge-${x.status}">${esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada peminjaman</div>';
+    const disp=d.disposisi&&d.disposisi.length?d.disposisi.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.instruksi||'Disposisi')}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_disposisi)} · ${esc(x.dari_nama||'-')} → ${esc(x.kepada_nama||'-')}</div></div><span class="badge badge-${x.status}">${DISP_STATUS_LABEL[x.status]||esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada disposisi</div>';
+    const pinj=d.peminjaman&&d.peminjaman.length?d.peminjaman.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.peminjam)}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_pinjam)} → ${formatDate(x.tanggal_jatuh_tempo)}${x.tanggal_kembali?' · kembali '+formatDate(x.tanggal_kembali):''}</div></div><span class="badge badge-${x.status}">${STATUS_LABEL[x.status]||esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada peminjaman</div>';
     const kategoriKode=d.kategori_kode||'?';
     document.getElementById('detailContent').innerHTML=`
     <div class="detail-hero"><div class="user-avatar" style="flex-shrink:0">${esc(String(kategoriKode).charAt(0))}</div><div><div class="dh-title">${esc(d.judul)}</div><div class="dh-sub">${esc(d.nomor_arsip)}</div></div></div>
@@ -1029,7 +1050,7 @@ async function loadDisposisi(){
     tb.innerHTML=rows.map(x=>{
       const bolehEdit=isAdmin()||x.dari_user===me||x.kepada_user===me;
       const aksi=`${bolehEdit?`<button class="icon-btn" onclick="openDisposisiModal(0,${x.id})" title="Edit">${ICONS.edit}</button>`:''}${canManage()?`<button class="icon-btn danger" onclick="delDisp(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}`;
-      return `<tr><td>${formatDate(x.tanggal_disposisi)}</td><td><span class="mono strong">${esc(x.nomor_arsip||'-')}</span><div style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.arsip_judul||'')}">${esc(x.arsip_judul||'')}</div></td><td>${esc(x.dari_nama||'-')}</td><td>${esc(x.kepada_nama||'-')}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.instruksi||'')}">${esc(x.instruksi||'-')}</td><td><span class="badge badge-${x.status}">${esc(x.status)}</span></td><td class="th-actions"><div class="cell-actions">${aksi||'<span style="color:var(--muted-2)">—</span>'}</div></td></tr>`;
+      return `<tr><td>${formatDate(x.tanggal_disposisi)}</td><td><span class="mono strong">${esc(x.nomor_arsip||'-')}</span><div style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.arsip_judul||'')}">${esc(x.arsip_judul||'')}</div></td><td>${esc(x.dari_nama||'-')}</td><td>${esc(x.kepada_nama||'-')}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.instruksi||'')}">${esc(x.instruksi||'-')}</td><td><span class="badge badge-${x.status}">${DISP_STATUS_LABEL[x.status]||esc(x.status)}</span></td><td class="th-actions"><div class="cell-actions">${aksi||'<span style="color:var(--muted-2)">—</span>'}</div></td></tr>`;
     }).join('');
   }catch(e){ toast(e.message,'error'); }
 }
@@ -1229,7 +1250,7 @@ function buildLaporanLayout(){ const sec=document.getElementById('page-laporan')
     </div>
     <div class="no-print panel filter-bar" style="background:var(--gold-soft);border-color:#eadfbe;padding:10px 16px"><span style="font-size:12.5px;color:#8a6d2f">Laporan dicetak dengan kop surat sesuai Profil Kantor. Kelola di menu <b>Profil Kantor</b>.</span></div>
     <div id="repArea"></div>`;
-  fillSelect('repKategori',Object.values(state.kategoriMap),x=>`${x.kode} — ${x.nama}`);
+  fillSelect('repKategori',Object.values(state.kategoriMap),x=>`${x.kode} — ${x.nama}`,'Semua Kategori');
   document.getElementById('repFilter').addEventListener('click',loadLaporanPage);
   document.getElementById('repPrint').addEventListener('click',()=>window.print());
   document.getElementById('repExport').addEventListener('click',()=>exportCsv());
@@ -1244,7 +1265,7 @@ async function loadLaporanPage(){ buildLaporanLayout();
     const s=state.settings||{};
     const area=document.getElementById('repArea');
     area.innerHTML=`<div class="print-kop"><h4>${esc(s.nama_kantor||'Kantor Pertanahan')}</h4><div class="kp-sub">${esc(s.sub_nama||'Badan Pertanahan Nasional')}</div><p>${esc(s.alamat||'')}</p><hr></div>
-    <div class="stat-mini-grid"><div class="stat-mini"><div class="sm-num">${d.rows.length}</div><div class="sm-label">Arsip terfilter</div></div><div class="stat-mini"><div class="sm-num">${d.total}</div><div class="sm-label">Total arsip</div></div></div>
+    <div class="stat-mini-grid report-sum"><div class="stat-mini"><div class="sm-num">${d.rows.length}</div><div class="sm-label">Arsip terfilter</div></div><div class="stat-mini"><div class="sm-num">${d.total}</div><div class="sm-label">Total arsip</div></div></div>
     <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nomor</th><th>Tanggal</th><th>Kategori</th><th>Judul</th><th>Perihal</th><th>Status</th></tr></thead><tbody>
     ${d.rows.length?d.rows.map(r=>`<tr><td class="mono strong">${esc(r.nomor_arsip)}</td><td>${formatDate(r.tanggal_arsip)}</td><td>${esc(r.kategori_kode)}</td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(r.judul)}">${esc(r.judul)}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(r.perihal||'-')}</td><td><span class="badge badge-${r.status}">${STATUS_LABEL[r.status]||r.status}</span></td></tr>`).join(''):'<tr><td colspan="6" class="empty-state">Tidak ada data</td></tr>'}
     </tbody></table></div></div>`;

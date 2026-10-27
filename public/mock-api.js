@@ -119,6 +119,10 @@
       });
       existing.arsip.forEach(function (a) { if (!a.kode_qr) a.kode_qr = makeKodeQr(a.nomor_arsip); });
       if (!existing.settings) existing.settings = clone(SETTINGS);
+      if (existing.notifikasi && existing.notifikasi.some(function (n) { return n.judul === 'Login berhasil'; })) {
+        existing.notifikasi = existing.notifikasi.filter(function (n) { return n.judul !== 'Login berhasil'; });
+        save();
+      }
       DB = existing; return DB;
     }
 
@@ -297,7 +301,6 @@
       loginClear(lk);
       user.last_login = nowIso();
       sessionSet(user.id);
-      buatNotifikasi(user.id, 'Login berhasil', 'Selamat datang kembali, ' + user.nama, 'info', null, null);
       save();
       return { user: { id: user.id, username: user.username, nama: user.nama, role: user.role } };
     }

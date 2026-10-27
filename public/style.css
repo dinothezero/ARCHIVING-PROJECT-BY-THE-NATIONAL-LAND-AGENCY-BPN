@@ -165,7 +165,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 
 /* ---- DASHBOARD CHARTS ---- */
 .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.hbar-list{display:flex;flex-direction:column;gap:11px;max-height:340px;overflow-y:auto;padding-right:4px}
+.hbar-list{display:flex;flex-direction:column;gap:11px;max-height:322px;overflow-y:auto;padding-right:4px}
 .hbar{display:flex;align-items:center;gap:12px}
 .hbar-label{min-width:118px;font-size:13px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar-track{flex:1;height:26px;background:var(--line-2);border-radius:7px;overflow:hidden}
@@ -176,8 +176,8 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 /* ---- TABLE ---- */
 .table-scroll{overflow-x:auto}
 .data-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.data-table th{background:var(--green-50);color:var(--green-800);font-weight:600;text-align:left;padding:13px 18px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap}
-.data-table td{padding:13px 18px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
+.data-table th{background:var(--green-50);color:var(--green-800);font-weight:600;text-align:left;padding:13px 14px;font-size:12px;letter-spacing:.4px;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap}
+.data-table td{padding:13px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
 .data-table tbody tr{transition:background .12s}
 .data-table tbody tr:hover{background:var(--green-50)}
 .data-table tbody tr:last-child td{border-bottom:none}
@@ -185,6 +185,11 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .strong{font-weight:600;color:var(--ink)}
 .mono{font-family:'Plus Jakarta Sans',monospace;font-weight:600}
 .cell-actions{display:flex;gap:6px;justify-content:flex-end}
+@media(min-width:701px){
+  .data-table th.th-actions,.data-table td.th-actions{position:sticky;right:0;background:#fff;box-shadow:-12px 0 14px -14px rgba(6,37,29,.38)}
+  .data-table th.th-actions{background:var(--green-50)}
+  .data-table tbody tr:hover td.th-actions{background:var(--green-50)}
+}
 
 /* ---- LIST (data arsip pagination wrapper) ---- */
 .list-wrap .panel{margin-bottom:16px}
@@ -204,8 +209,15 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .badge-aktif{background:var(--green-100);color:var(--green-700)}
 .badge-arsip{background:var(--gold-soft);color:#a9792c}
 .badge-dipinjam{background:#fdeaea;color:#c76b76}
+.badge-terlambat{background:#fdeaea;color:#e05c47}
+.badge-dikembalikan{background:var(--green-50);color:var(--green-700)}
 .badge-hilang{background:#fbeaea;color:#c0392b}
 .badge-rusak{background:#f1ecfb;color:#7d5bc6}
+.badge-proses{background:#e8f0fb;color:#3f6fa8}
+.badge-diterima{background:#e8f5ee;color:#2f7d5a}
+.badge-selesai{background:var(--green-100);color:var(--green-700)}
+.badge-ditolak{background:#fbeaea;color:#c0392b}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-width:38px;padding:2px 9px;border-radius:6px;background:var(--green-100);color:var(--green-800);font-size:11px;font-weight:700;letter-spacing:.4px}
 
 /* ---- CONTROLS ---- */
 .ctl{width:100%;padding:10px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;background:#fff;transition:border-color .15s,box-shadow .15s}
@@ -238,6 +250,8 @@ body.modal-open{overflow:hidden}
 .upload-zone.uploading{pointer-events:none;opacity:.65;border-color:var(--green-500);background:var(--green-50);cursor:progress}
 .upload-zone p{font-size:14px;color:var(--ink-2);margin-bottom:4px}
 .upload-zone small{font-size:12px;color:var(--muted-2)}
+#importZone small{display:block;max-width:540px;margin:2px auto 0;line-height:1.6}
+#importZone .btn{display:block;margin-left:auto;margin-right:auto}
 .upload-link{color:var(--green-700);cursor:pointer;font-weight:600;text-decoration:underline}
 .file-list{display:flex;flex-direction:column;gap:9px;margin-top:18px}
 .file-item{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--bg);border:1px solid var(--line-2);border-radius:10px}
@@ -260,7 +274,7 @@ body.modal-open{overflow:hidden}
 .empty-state{text-align:center;padding:44px 20px;color:var(--muted-2);font-size:14px}
 
 /* ---- TOAST ---- */
-.toast-container{position:fixed;top:20px;right:20px;z-index:400;display:flex;flex-direction:column;gap:9px}
+.toast-container{position:fixed;top:84px;right:20px;z-index:400;display:flex;flex-direction:column;gap:9px}
 .toast{display:flex;align-items:center;gap:9px;padding:13px 18px;border-radius:12px;color:#fff;font-size:13.5px;font-weight:500;box-shadow:var(--sh-lg);animation:toastIn .28s cubic-bezier(.22,.8,.3,1);max-width:360px}
 .toast.success{background:linear-gradient(135deg,var(--green-700),var(--green-500))}
 .toast.error{background:linear-gradient(135deg,#a93226,#e74c3c)}
@@ -297,11 +311,52 @@ body.modal-open{overflow:hidden}
   .stat-icon{width:44px;height:44px}
   .stat-number{font-size:24px}
   .stat-caption{display:none}
+  .app-topbar{gap:10px;padding:0 12px}
+  .topbar-brand{gap:9px}
+  .topbar-brand-text span{display:none}
+  .topbar-brand-text strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .topbar-right{gap:8px}
+  .topbar-right .icon-btn{width:36px;height:36px}
+  .user-avatar{width:36px;height:36px;font-size:13px}
+  .topbar-user{gap:0}
   .topbar-user-text{display:none}
   .page-head{flex-direction:column;align-items:flex-start}
   .form-row{grid-template-columns:1fr}
   .app-footer{flex-direction:column;align-items:flex-start}
   .footer-copy{text-align:left}
+}
+
+/* Tabel arsip jadi kartu di layar kecil */
+@media(max-width:700px){
+  #page-arsip .table-scroll{overflow:visible}
+  #page-arsip .data-table,#page-arsip .data-table tbody{display:block}
+  #page-arsip .data-table thead{display:none}
+  #page-arsip .data-table tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"check nomor status" "judul judul judul" "aksi aksi aksi";gap:8px 10px;padding:12px 14px;border-bottom:1px solid var(--line-2);align-items:center}
+  #page-arsip .data-table tr:last-child{border-bottom:none}
+  #page-arsip .data-table td{border:none;padding:0;white-space:normal;min-width:0}
+  #page-arsip .data-table td:nth-child(1){grid-area:check}
+  #page-arsip .data-table td:nth-child(3){grid-area:nomor}
+  #page-arsip .data-table td:nth-child(5){grid-area:judul;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:normal;font-weight:600;line-height:1.4}
+  #page-arsip .data-table td:nth-child(8){grid-area:status;justify-self:end}
+  #page-arsip .data-table td:nth-child(9){grid-area:aksi}
+  #page-arsip .data-table td:nth-child(2),#page-arsip .data-table td:nth-child(4),#page-arsip .data-table td:nth-child(6),#page-arsip .data-table td:nth-child(7){display:none}
+  #page-arsip .data-table td.empty-state{grid-column:1/-1;grid-area:auto;display:block;text-align:center;padding:20px 10px}
+  #page-arsip .cell-actions{justify-content:flex-start;flex-wrap:wrap}
+
+  /* Tabel data lain jadi kartu berlabel */
+  .table-stack,.table-stack tbody{display:block}
+  .table-stack thead{display:none}
+  .table-stack tr{display:block;padding:10px 16px;border-bottom:1px solid var(--line-2)}
+  .table-stack tr:last-child{border-bottom:none}
+  .table-stack td{display:grid;grid-template-columns:minmax(80px,112px) minmax(0,1fr);align-items:baseline;gap:14px;border:none;padding:4px 0;white-space:normal;width:auto;text-align:right;max-width:none!important;overflow:visible!important;text-overflow:clip!important}
+  .table-stack td::before{content:attr(data-label);font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted-2);line-height:1.7;text-align:left}
+  .table-stack td>div[style]{grid-column:1/-1;min-width:0!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:normal!important;text-align:left}
+  .table-stack td>*{min-width:0}
+  .table-stack td>.badge,.table-stack td>.chip,.table-stack td>.tag,.table-stack td>.agenda-no{justify-self:end}
+  .table-stack td .cell-actions{justify-content:flex-end;flex-wrap:wrap}
+  .table-stack td.empty-state{display:block;text-align:center;padding:22px 8px;color:var(--muted-2)}
+  .table-stack td.empty-state::before{content:none}
+  .table-stack td[data-label=""]::before{content:none}
 }
 
 /* ===================== FITUR BARU ===================== */
@@ -368,6 +423,7 @@ body.modal-open{overflow:hidden}
 /* Report / print */
 .report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
 .stat-mini-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.stat-mini-grid.report-sum{grid-template-columns:repeat(2,minmax(0,1fr));max-width:480px}
 .stat-mini{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
 .stat-mini .sm-num{font-family:var(--serif);font-size:26px;font-weight:700;color:var(--green-800)}
 .stat-mini .sm-label{font-size:12px;color:var(--muted);margin-top:2px}
