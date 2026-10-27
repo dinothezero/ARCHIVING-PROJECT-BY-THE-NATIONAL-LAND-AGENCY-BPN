@@ -216,7 +216,7 @@ const kategoriDefault = [
   ['SKK', 'Surat Keputusan Kepala BPN', 'Surat keputusan dari kepala BPN'],
   ['SM', 'Surat Masuk', 'Surat masuk dari instansi lain'],
   ['SKL', 'Surat Keluar', 'Surat keluar ke instansi lain'],
-  ['SHM', 'Sertifikak Hak Milik', 'Sertifikat hak milik tanah'],
+  ['SHM', 'Sertifikat Hak Milik', 'Sertifikat hak milik tanah'],
   ['SHG', 'Sertifikat Hak Guna', 'Sertifikat hak guna bangunan/usaha'],
   ['HGB', 'Hak Guna Bangunan', 'Dokumen hak guna bangunan'],
   ['HGU', 'Hak Guna Usaha', 'Dokumen hak guna usaha'],

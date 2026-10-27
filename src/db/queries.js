@@ -1,7 +1,9 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
+const fs = require('fs');
 
 const dbPath = path.join(__dirname, '..', '..', 'data', 'arsip.db');
+if (!fs.existsSync(path.dirname(dbPath))) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new DatabaseSync(dbPath);
 db.exec('PRAGMA foreign_keys = ON');
 
@@ -55,6 +57,8 @@ module.exports = {
   updateUser: db.prepare('UPDATE users SET nama = ?, role = ?, aktif = ? WHERE id = ?'),
   updatePassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
   setLastLogin: db.prepare('UPDATE users SET last_login = ? WHERE id = ?'),
+  getUserRingkas: db.prepare('SELECT id, nama, role, aktif FROM users ORDER BY nama'),
+  countActiveAdmins: db.prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND aktif = 1"),
 
   /* ---------- KATEGORI ---------- */
   getAllKategori: db.prepare('SELECT * FROM kategori_arsip ORDER BY kode'),
@@ -131,12 +135,13 @@ module.exports = {
 
   /* ---------- STATISTIK ---------- */
   getArsipStats: db.prepare(`
-    SELECT COUNT(*) AS total,
-      COALESCE(SUM(CASE WHEN status = 'aktif' THEN 1 ELSE 0 END), 0) AS aktif,
-      COALESCE(SUM(CASE WHEN status = 'arsip' THEN 1 ELSE 0 END), 0) AS diarsipkan,
-      COALESCE(SUM(CASE WHEN status = 'dipinjam' THEN 1 ELSE 0 END), 0) AS dipinjam,
-      COALESCE(SUM(CASE WHEN status = 'hilang' THEN 1 ELSE 0 END), 0) AS hilang,
-      COALESCE(SUM(CASE WHEN status = 'rusak' THEN 1 ELSE 0 END), 0) AS rusak,
+    SELECT
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END), 0) AS total,
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL AND status = 'aktif' THEN 1 ELSE 0 END), 0) AS aktif,
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL AND status = 'arsip' THEN 1 ELSE 0 END), 0) AS diarsipkan,
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL AND status = 'dipinjam' THEN 1 ELSE 0 END), 0) AS dipinjam,
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL AND status = 'hilang' THEN 1 ELSE 0 END), 0) AS hilang,
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL AND status = 'rusak' THEN 1 ELSE 0 END), 0) AS rusak,
       COALESCE(SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS sampah
     FROM arsip
   `),
@@ -147,7 +152,7 @@ module.exports = {
   `),
   getStatsByBulan: db.prepare(`
     SELECT strftime('%Y-%m', tanggal_arsip) AS bulan, COUNT(*) AS jumlah
-    FROM arsip WHERE tanggal_arsip >= date('now', '-12 months') AND deleted_at IS NULL
+    FROM arsip WHERE tanggal_arsip >= date('now', 'localtime', '-12 months') AND deleted_at IS NULL
     GROUP BY bulan ORDER BY bulan
   `),
   getStatsByStatus: db.prepare(`
@@ -162,25 +167,49 @@ module.exports = {
     LEFT JOIN users k ON d.kepada_user = k.id
     WHERE d.arsip_id = ? ORDER BY d.created_at DESC
   `),
+  getAllDisposisi: db.prepare(`
+    SELECT d.*, u.nama AS dari_nama, k.nama AS kepada_nama,
+           a.nomor_arsip, a.judul AS arsip_judul, a.deleted_at AS arsip_deleted_at,
+           kk.nama AS kategori_nama, kk.kode AS kategori_kode
+    FROM disposisi d
+    LEFT JOIN users u ON d.dari_user = u.id
+    LEFT JOIN users k ON d.kepada_user = k.id
+    JOIN arsip a ON d.arsip_id = a.id
+    JOIN kategori_arsip kk ON a.kategori_id = kk.id
+    ORDER BY d.created_at DESC
+  `),
+  getDisposisiById: db.prepare('SELECT * FROM disposisi WHERE id = ?'),
   insertDisposisi: db.prepare(`
     INSERT INTO disposisi (arsip_id, dari_user, kepada_user, instruksi, status, tanggal_disposisi, catatan, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `),
-  updateDisposisi: db.prepare('UPDATE disposisi SET status = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
+  updateDisposisi: db.prepare(`
+    UPDATE disposisi SET kepada_user = ?, instruksi = ?, status = ?, tanggal_disposisi = ?, catatan = ?,
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `),
   deleteDisposisi: db.prepare('DELETE FROM disposisi WHERE id = ?'),
 
   /* ---------- PEMINJAMAN ---------- */
   getPeminjamanList: db.prepare(`
-    SELECT p.*, a.nomor_arsip, a.judul, a.tanggal_arsip, k.nama AS kategori_nama, k.kode AS kategori_kode
+    SELECT p.*, a.nomor_arsip, a.judul, a.tanggal_arsip, k.nama AS kategori_nama, k.kode AS kategori_kode,
+           COALESCE(ub.nama, p.unit_peminjam) AS unit_nama
     FROM peminjaman p
     JOIN arsip a ON p.arsip_id = a.id
     JOIN kategori_arsip k ON a.kategori_id = k.id
+    LEFT JOIN unit_bidang ub ON ub.id = CAST(p.unit_peminjam AS INTEGER)
     WHERE a.deleted_at IS NULL
     ORDER BY p.created_at DESC
   `),
   getPeminjamanByArsip: db.prepare(`
-    SELECT p.* FROM peminjaman p JOIN arsip a ON p.arsip_id = a.id
+    SELECT p.*, COALESCE(ub.nama, p.unit_peminjam) AS unit_nama
+    FROM peminjaman p
+    JOIN arsip a ON p.arsip_id = a.id
+    LEFT JOIN unit_bidang ub ON ub.id = CAST(p.unit_peminjam AS INTEGER)
     WHERE p.arsip_id = ? ORDER BY p.created_at DESC
+  `),
+  getPeminjamanById: db.prepare('SELECT * FROM peminjaman WHERE id = ?'),
+  getActiveLoanByArsip: db.prepare(`
+    SELECT * FROM peminjaman WHERE arsip_id = ? AND status IN ('dipinjam', 'terlambat') ORDER BY created_at DESC LIMIT 1
   `),
   insertPeminjaman: db.prepare(`
     INSERT INTO peminjaman (arsip_id, peminjam, unit_peminjam, alasan, tanggal_pinjam, tanggal_jatuh_tempo, tanggal_kembali, status, catatan, created_by)
@@ -189,7 +218,7 @@ module.exports = {
   updatePeminjaman: db.prepare('UPDATE peminjaman SET status = ?, tanggal_kembali = ?, catatan = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'),
   deletePeminjaman: db.prepare('DELETE FROM peminjaman WHERE id = ?'),
   checkOverdue: db.prepare(`
-    SELECT * FROM peminjaman WHERE tanggal_kembali IS NULL AND tanggal_jatuh_tempo < date('now') AND status = 'dipinjam'
+    SELECT * FROM peminjaman WHERE tanggal_kembali IS NULL AND tanggal_jatuh_tempo < date('now', 'localtime') AND status = 'dipinjam'
   `),
   markOverdue: db.prepare("UPDATE peminjaman SET status = 'terlambat', updated_at = CURRENT_TIMESTAMP WHERE id = ?"),
 
@@ -208,7 +237,7 @@ module.exports = {
   /* ---------- NOTIFIKASI ---------- */
   getNotifikasiUser: db.prepare('SELECT * FROM notifikasi WHERE user_id = ? ORDER BY created_at DESC LIMIT 50'),
   getUnreadCount: db.prepare('SELECT COUNT(*) AS cnt FROM notifikasi WHERE user_id = ? AND is_read = 0'),
-  markNotifRead: db.prepare('UPDATE notifikasi SET is_read = 1 WHERE id = ?'),
+  markNotifRead: db.prepare('UPDATE notifikasi SET is_read = 1 WHERE id = ? AND user_id = ?'),
   markAllRead: db.prepare('UPDATE notifikasi SET is_read = 1 WHERE user_id = ?'),
 
   /* ---------- SETTINGS / PROFIL KANTOR ---------- */
@@ -239,7 +268,7 @@ module.exports = {
 
   /* ---------- AGENDA KEGIATAN (KALENDER) ---------- */
   getAgendaBulan: db.prepare("SELECT * FROM agenda_kegiatan WHERE strftime('%Y-%m', tanggal) = ? ORDER BY tanggal, jam_mulai"),
-  getAgendaHariIni: db.prepare("SELECT * FROM agenda_kegiatan WHERE tanggal = date('now') ORDER BY jam_mulai"),
+  getAgendaHariIni: db.prepare("SELECT * FROM agenda_kegiatan WHERE tanggal = date('now', 'localtime') ORDER BY jam_mulai"),
   getAgendaById: db.prepare('SELECT * FROM agenda_kegiatan WHERE id = ?'),
   insertAgendaKegiatan: db.prepare(`
     INSERT INTO agenda_kegiatan (judul, tanggal, jam_mulai, jam_selesai, lokasi, tipe, keterangan, created_by)

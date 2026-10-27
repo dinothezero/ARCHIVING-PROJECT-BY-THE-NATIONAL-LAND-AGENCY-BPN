@@ -44,6 +44,8 @@ html{scroll-behavior:smooth}
 body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 a{text-decoration:none;color:inherit}
+a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--green-600);outline-offset:2px}
+.input-wrap input:focus-visible,.ctl:focus-visible{outline:none}
 
 /* ===================== LOGIN ===================== */
 .login-wrap{display:grid;grid-template-columns:1.05fr .95fr;min-height:100vh;background:#fff}
@@ -74,6 +76,7 @@ a{text-decoration:none;color:inherit}
 .input-wrap input::placeholder{color:var(--muted-2)}
 .input-wrap input:focus{outline:none;border-color:var(--green-500);box-shadow:0 0 0 4px rgba(42,160,126,.14)}
 .error-msg{color:#b3261e;font-size:13px;padding:11px 14px;background:#fdeceb;border:1px solid #f6ccca;border-radius:9px;margin-bottom:14px}
+.static-mode-note{margin-top:18px;padding:10px 13px;border-radius:9px;background:var(--gold-soft);border:1px solid #ecdcb5;color:#7a5a1e;font-size:12.5px;line-height:1.55}
 .btn-login{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border:none;border-radius:11px;background:linear-gradient(135deg,var(--green-700),var(--green-600));color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:transform .12s,box-shadow .18s;box-shadow:0 8px 22px rgba(23,106,84,.3)}
 .btn-login:hover{box-shadow:0 12px 28px rgba(23,106,84,.38);transform:translateY(-1px)}
 .btn-login:active{transform:translateY(0)}
@@ -214,9 +217,12 @@ textarea.ctl{resize:vertical}
 .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
 
 /* ---- MODAL ---- */
+body.modal-open{overflow:hidden}
 .modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
-.modal-overlay{position:absolute;inset:0;background:rgba(6,25,19,.5);backdrop-filter:blur(3px)}
-.modal-panel{position:relative;background:#fff;border-radius:var(--r-lg);width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--sh-lg);overflow:hidden;animation:modalIn .22s cubic-bezier(.22,.8,.3,1)}
+.modal-overlay{position:absolute;inset:0;background:rgba(6,25,19,.5);backdrop-filter:blur(3px);opacity:0;transition:opacity .18s ease}
+.modal-panel{position:relative;background:#fff;border-radius:var(--r-lg);width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--sh-lg);overflow:hidden;opacity:0;transform:translateY(14px) scale(.98);transition:opacity .18s ease,transform .22s cubic-bezier(.22,.8,.3,1);will-change:opacity,transform}
+.modal.open .modal-overlay{opacity:1}
+.modal.open .modal-panel{opacity:1;transform:none}
 @keyframes modalIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 .modal-panel.modal-lg{max-width:680px}
 .modal-panel.modal-sm{max-width:430px}
@@ -229,6 +235,7 @@ textarea.ctl{resize:vertical}
 .upload-zone{border:2px dashed #c6d5cd;border-radius:var(--r-md);padding:30px 20px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .18s,background .18s}
 .upload-zone svg{color:var(--green-500);margin-bottom:6px}
 .upload-zone:hover,.upload-zone.dragover{border-color:var(--green-500);background:var(--green-50)}
+.upload-zone.uploading{pointer-events:none;opacity:.65;border-color:var(--green-500);background:var(--green-50);cursor:progress}
 .upload-zone p{font-size:14px;color:var(--ink-2);margin-bottom:4px}
 .upload-zone small{font-size:12px;color:var(--muted-2)}
 .upload-link{color:var(--green-700);cursor:pointer;font-weight:600;text-decoration:underline}
@@ -301,7 +308,8 @@ textarea.ctl{resize:vertical}
 /* Notifikasi */
 .notif-wrap{position:relative}
 .notif-badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:10px;background:#e05c47;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
-.notif-dropdown{position:absolute;top:50px;right:0;width:320px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-lg);overflow:hidden;z-index:120}
+.notif-dropdown{position:absolute;top:50px;right:0;width:320px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-lg);overflow:hidden;z-index:120;opacity:0;visibility:hidden;transform:translateY(-6px) scale(.98);transform-origin:top right;transition:opacity .16s ease,transform .18s cubic-bezier(.22,.8,.3,1),visibility .16s}
+.notif-dropdown.open{opacity:1;visibility:visible;transform:none}
 .notif-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--line-2);background:var(--bg)}
 .notif-head strong{font-size:14px;color:var(--ink)}
 .link-btn{background:none;border:none;color:var(--green-700);font-size:12.5px;cursor:pointer;font-weight:600}
@@ -320,7 +328,8 @@ textarea.ctl{resize:vertical}
 .notif-dot{width:8px;height:8px;border-radius:50%;background:var(--green-500);margin-top:5px;flex-shrink:0}
 
 /* User dropdown */
-.user-dropdown,.user-nested{position:absolute;right:0;top:48px;width:200px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh-lg);padding:6px;z-index:120}
+.user-dropdown,.user-nested{position:absolute;right:0;top:48px;width:200px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh-lg);padding:6px;z-index:120;opacity:0;visibility:hidden;transform:translateY(-6px) scale(.98);transform-origin:top right;transition:opacity .16s ease,transform .18s cubic-bezier(.22,.8,.3,1),visibility .16s}
+.user-dropdown.open,.user-nested.open{opacity:1;visibility:visible;transform:none}
 .ud-head{padding:10px;border-bottom:1px solid var(--line-2);margin-bottom:6px}
 .ud-head strong{font-size:14px;display:block}
 .ud-head span{font-size:12px;color:var(--muted);text-transform:capitalize}
@@ -371,9 +380,17 @@ textarea.ctl{resize:vertical}
   .app-topbar,.sidebar,.app-footer,.page-head,.panel-head-action,button,.no-print{display:none !important}
   .main{padding:0 !important}
   .panel{box-shadow:none;border:1px solid #ccc;margin:0}
-  body{background:#fff}
-  .page{display:block !important}
-  #modalDetail{display:none !important}
+  body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body:not(.print-detail) .page:not(.active){display:none !important}
+  body:not(.print-detail) #modalDetail{display:none !important}
+  body.print-detail .app-shell,body.print-detail .gov-stripe,body.print-detail .splash{display:none !important}
+  body.print-detail #modalDetail{display:block !important;position:static;inset:auto;padding:0;z-index:auto}
+  body.print-detail #modalDetail .modal-overlay,
+  body.print-detail #modalDetail .modal-head,
+  body.print-detail #modalDetail .modal-foot,
+  body.print-detail #modalDetail .no-print{display:none !important}
+  body.print-detail #modalDetail .modal-panel{max-width:none;max-height:none;box-shadow:none;border:0;border-radius:0;overflow:visible;opacity:1;transform:none}
+  body.print-detail #modalDetail .modal-body{overflow:visible;padding:0}
 }
 .qr-print-only{display:none}
 @media print{
@@ -633,8 +650,8 @@ textarea.ctl{resize:vertical}
 @keyframes toastOut{to{opacity:0;transform:translateX(110%)}}
 
 /* ---- MODAL CLOSING ---- */
-.modal.closing .modal-overlay{animation:fadeOut .18s ease forwards}
-.modal.closing .modal-panel{animation:modalOut .18s ease forwards}
+.modal.closing .modal-overlay{opacity:0}
+.modal.closing .modal-panel{opacity:0;transform:translateY(12px) scale(.97);transition-duration:.18s,.18s}
 
 /* ---- BTN GOLD ---- */
 .btn-gold{background:linear-gradient(135deg,#b8860b,#e0bc6d);color:#fff;box-shadow:0 5px 16px rgba(184,134,11,.28)}
@@ -686,4 +703,12 @@ textarea.ctl{resize:vertical}
   .print-kop p{font-size:11.5px;color:#444;margin-top:6px}
   .print-kop hr{border:none;border-top:2px solid #000;width:100%;margin-top:10px}
   .dash-hero,.report-actions{display:none !important}
+}
+
+/* ---- AKSESIBILITAS: REDUCED MOTION ---- */
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+  .rv{opacity:1;transform:none}
+  .splash-bar-fill{width:100%}
 }

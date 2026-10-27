@@ -2,12 +2,13 @@ const state = {
   currentUser: null,
   currentPage: 'dashboard',
   arsipPage: 1, arsipLimit: 20,
-  kategoriMap: {}, lokasiMap: {}, unitMap: {}, instansiMap: {}, userMap: {}, dispMap: {},
+  kategoriMap: {}, lokasiMap: {}, unitMap: {}, instansiMap: {}, userMap: {}, userList: null, dispMap: {},
   filters: { search: '', kategori: '', status: '', dari: '', sampai: '', lokasi: '', instansi: '' },
   masterTab: 'lokasi',
   bgJenis: 'masuk', bgMap: {},
   kalYear: 0, kalMonth: 0, selectedDay: null,
-  settings: null, kegMap: {}, kegMapLoaded: false
+  settings: null, kegMap: {}, kegMapLoaded: false,
+  notifTimer: null, detailId: null, arsipOptions: null, arsipOptionMap: {}
 };
 
 const PAGE_META = {
@@ -27,23 +28,36 @@ const PAGE_META = {
 };
 
 /* ============ API ============ */
-// STATIC_MODE aktif saat halaman dijalankan di hosting statis (GitHub Pages),
-// yaitu ketika hostname bukan localhost/127.0.0.1 (server Express lokal).
-const STATIC_MODE = (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1');
+// STATIC_MODE aktif hanya di hosting statis (GitHub Pages / file://).
+// Alamat lokal & jaringan privat (LAN) tetap memakai server Express.
+const HOSTNAME = location.hostname;
+const IS_PRIVATE_HOST = /^(localhost|127\.|0\.0\.0\.0|\[::1\]|::1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(HOSTNAME);
+const STATIC_MODE = !IS_PRIVATE_HOST;
+
+if (STATIC_MODE) {
+  const note = document.getElementById('staticModeNote'); if (note) note.style.display = 'block';
+  const foot = document.getElementById('footNote'); if (foot) foot.textContent = 'Mode statis · data tersimpan di browser ini';
+}
 
 async function api(url, options = {}) {
   if (STATIC_MODE && window.__mockApi) {
     try { return await window.__mockApi(url, options); }
     catch (e) { if (e && e.status === 401) showLogin(); throw e; }
   }
-  const opts = { headers: { 'Content-Type': 'application/json' }, ...options };
+  const opts = { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options };
   if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
-  const res = await fetch(url, opts);
-  if (res.status === 401) { showLogin(); throw new Error('Sesi berakhir, silakan masuk kembali'); }
-  if (res.status === 403) { const d = await res.json().catch(()=>{}); throw new Error((d&&d.error) || 'Akses ditolak'); }
-  if (res.status === 404) { const d = await res.json().catch(()=>{}); throw new Error((d&&d.error) || 'Tidak ditemukan'); }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Terjadi kesalahan');
+  let res;
+  try { res = await fetch(url, opts); }
+  catch (e) { throw new Error('Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.'); }
+  let data = null;
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) { try { data = await res.json(); } catch (e) { data = null; } }
+  if (res.status === 401) {
+    showLogin(true);
+    throw new Error((data && data.error) || 'Sesi berakhir, silakan masuk kembali');
+  }
+  if (!res.ok) throw new Error((data && data.error) || `Permintaan gagal (${res.status})`);
+  if (data === null) { try { data = await res.json(); } catch (e) { throw new Error('Respons server tidak valid'); } }
   return data;
 }
 
@@ -58,7 +72,24 @@ window.downloadBackup = function () {
 };
 
 /* ============ HELPERS ============ */
-function esc(s) { if (s === null || s === undefined) return ''; const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function todayLocal(d = new Date()) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+// Timestamp dari server berupa UTC tanpa penanda zona; parse sebagai UTC.
+function parseServerDate(dt) {
+  if (dt instanceof Date) return dt;
+  const s = String(dt || '').trim();
+  if (!s) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return new Date(s.replace(' ', 'T') + 'Z');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) return new Date(s + 'Z');
+  return new Date(s);
+}
 const ICONS = {
   eye:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
   edit:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
@@ -80,14 +111,26 @@ function toast(message, type = 'info', ms = 3200) {
 }
 function formatDate(d) { if (!d) return '-'; const p = String(d).split('-'); if (p.length !== 3) return d; const n=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']; return `${p[2]} ${n[parseInt(p[1])-1]} ${p[0]}`; }
 function formatBytes(b) { if (!b) return '-'; if (b < 1024) return b+' B'; if (b < 1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
-function formatDateTime(dt) { if (!dt) return '-'; const d = new Date(dt); if (isNaN(d)) return dt; return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function formatDateTime(dt) { if (!dt) return '-'; const d = parseServerDate(dt); if (isNaN(d)) return dt; return d.toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 const STATUS_LABEL = { aktif:'Aktif', arsip:'Arsip', dipinjam:'Dipinjam', hilang:'Hilang', rusak:'Rusak' };
 
 /* ============ NAVIGATION ============ */
-function showPage(page) {
+function isAdmin(){ return state.currentUser && state.currentUser.role === 'admin'; }
+function canManage(){ return state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'staff'); }
+function canAccessPage(page){
+  if (page === 'users' || page === 'log') return isAdmin();
+  if (page === 'sampah') return canManage();
+  return true;
+}
+function applyRoleVisibility(){
+  document.querySelectorAll('.nav-admin').forEach(n => { n.style.display = isAdmin() ? '' : 'none'; });
+  document.querySelectorAll('.nav-item[data-page="sampah"]').forEach(n => { n.style.display = canManage() ? '' : 'none'; });
+}
+async function showPage(page) {
+  if (!canAccessPage(page)) { page = 'dashboard'; }
   state.currentPage = page;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('entering'); });
+  document.querySelectorAll('.page').forEach(p => { p.style.display = 'none'; p.classList.remove('entering', 'active'); });
   const target = document.getElementById('page-' + page);
   if (!target) return;
   const [t, s] = PAGE_META[page] || [page, ''];
@@ -95,35 +138,51 @@ function showPage(page) {
   document.getElementById('pageSub').textContent = s;
   const actionEl = document.getElementById('pageHeadAction');
   actionEl.innerHTML = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (page === 'dashboard') { loadDashboard(); }
-  else if (page === 'arsip') { actionEl.innerHTML = `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button>` + (isAdmin()?`<button id="btnImportArsip" class="btn btn-gold">Import CSV</button>`:''); document.getElementById('btnTambahArsip').onclick = openTambahArsip; const ib=document.getElementById('btnImportArsip'); if(ib) ib.onclick=openImportModal; buildArsipLayout(); ensureDropdowns(); loadArsip(); }
+  else if (page === 'arsip') {
+    actionEl.innerHTML = `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button>` + (canManage()?`<button id="btnImportArsip" class="btn btn-gold">Import CSV</button>`:'');
+    document.getElementById('btnTambahArsip').onclick = openTambahArsip;
+    const ib=document.getElementById('btnImportArsip'); if(ib) ib.onclick=openImportModal;
+    await ensureDropdowns(); if (state.currentPage !== 'arsip') return;
+    buildArsipLayout(); loadArsip();
+  }
   else if (page === 'buku-agenda') { actionEl.innerHTML = `<button id="btnTambahBg" class="btn btn-primary">${ICONS.plus} Catat Agenda</button>`; document.getElementById('btnTambahBg').onclick = ()=>openBukuAgendaModal(); buildBukuAgendaLayout(); loadBukuAgenda(); }
   else if (page === 'disposisi') { actionEl.innerHTML = `<button id="btnTambahDisp" class="btn btn-primary">${ICONS.plus} Buat Disposisi</button>`; document.getElementById('btnTambahDisp').onclick = ()=>openDisposisiModal(); buildDisposisiLayout(); loadDisposisi(); }
   else if (page === 'peminjaman') { actionEl.innerHTML = `<button id="btnTambahPinjam" class="btn btn-primary">${ICONS.plus} Catat Peminjaman</button>`; document.getElementById('btnTambahPinjam').onclick = ()=>openPeminjamanModal(); buildPeminjamanLayout(); loadPeminjaman(); }
   else if (page === 'kalender') { actionEl.innerHTML = `<button id="btnTambahKegiatan" class="btn btn-primary">${ICONS.plus} Tambah Kegiatan</button>`; document.getElementById('btnTambahKegiatan').onclick = ()=>openKegiatanModal(); buildKalenderLayout(); loadKalenderPage(); }
-  else if (page === 'kategori') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b=document.getElementById('btnTambahKategori'); if(b)b.onclick=openTambahKategori; ensureDropdowns(); loadKategoriPage(); }
+  else if (page === 'kategori') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b=document.getElementById('btnTambahKategori'); if(b)b.onclick=openTambahKategori; buildKategoriLayout(); loadKategoriPage(); }
   else if (page === 'master') { buildMasterLayout(); loadMaster(); }
-  else if (page === 'users') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b=document.getElementById('btnTambahUser'); if(b)b.onclick=openTambahUser; ensureDropdowns(); loadUsersPage(); }
-  else if (page === 'laporan') { loadLaporanPage(); }
+  else if (page === 'users') { buildUsersLayout(); if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b=document.getElementById('btnTambahUser'); if(b)b.onclick=openTambahUser; loadUsersPage(); }
+  else if (page === 'laporan') { await ensureDropdowns(); if (state.currentPage !== 'laporan') return; loadLaporanPage(); }
   else if (page === 'sampah') { buildSampahLayout(); loadSampah(); }
   else if (page === 'log') { buildLogLayout(); loadLogPage(); }
   else if (page === 'profil') { loadProfilPage(); }
 
   target.style.display = 'block';
   void target.offsetWidth;
-  target.classList.add('entering');
+  target.classList.add('active', 'entering');
   document.getElementById('sidebar').classList.remove('open');
-  if (!isAdminUser()) { hideAdminNav(); }
+  applyRoleVisibility();
 }
-function hideAdminNav(){ document.querySelectorAll('.nav-admin').forEach(n=>n.style.display='none'); }
-function isAdmin(){ return state.currentUser && state.currentUser.role === 'admin'; }
-function isAdminUser(){ return state.currentUser && (state.currentUser.role==='admin'||state.currentUser.role==='kepala'); }
 
 /* ============ AUTH ============ */
-function showLogin(){ document.getElementById('loginPage').style.display='grid'; document.getElementById('appPage').style.display='none'; }
+function showLogin(silent){
+  clearInterval(state.notifTimer); state.notifTimer = null;
+  state.currentUser = null;
+  state.userList = null; state.arsipOptions = null; state.arsipOptionMap = {};
+  state.dispMap = {}; state.userMap = {}; state.detailId = null;
+  closeUserDropdown(); closeNotifDropdown();
+  document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; m.classList.remove('closing','open'); });
+  document.body.classList.remove('modal-open', 'print-detail');
+  document.getElementById('loginPage').style.display = 'grid';
+  document.getElementById('appPage').style.display = 'none';
+  if (!silent) { const el = document.getElementById('loginError'); if (el) el.style.display = 'none'; }
+}
 function showApp(user){
-  document.getElementById('loginPage').style.display='none'; document.getElementById('appPage').style.display='flex';
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display = 'flex';
   state.currentUser = user;
   document.getElementById('userName').textContent = user.nama;
   document.getElementById('userAvatar').textContent = (user.nama||'?').charAt(0).toUpperCase();
@@ -131,20 +190,31 @@ function showApp(user){
   document.getElementById('userRole').textContent = roleNames[user.role]||user.role;
   document.getElementById('udName').textContent = user.nama;
   document.getElementById('udRole').textContent = roleNames[user.role]||user.role;
-  hideAdminNav();
+  applyRoleVisibility();
   loadNotifikasi();
-  setInterval(()=>{ if(state.currentUser) loadNotifikasi(true); }, 30000);
+  clearInterval(state.notifTimer);
+  state.notifTimer = setInterval(()=>{ if(state.currentUser) loadNotifikasi(true); }, 30000);
 }
 document.getElementById('loginForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const errEl=document.getElementById('loginError'); errEl.style.display='none';
+  const btn=e.target.querySelector('button[type="submit"]');
+  if(btn){ btn.disabled=true; btn.classList.add('loading'); }
   try{
     const data = await api('/api/login',{method:'POST',body:{username:document.getElementById('loginUser').value.trim(),password:document.getElementById('loginPass').value}});
+    document.getElementById('loginPass').value='';
     showApp(data.user); showPage('dashboard');
     toast('Selamat datang, '+data.user.nama+'!','success');
-  }catch(err){ errEl.textContent=err.message; errEl.style.display='block'; }
+  }catch(err){
+    errEl.textContent=err.message; errEl.style.display='block';
+    errEl.classList.remove('shake'); void errEl.offsetWidth; errEl.classList.add('shake');
+  }finally{ if(btn){ btn.disabled=false; btn.classList.remove('loading'); } }
 });
-document.getElementById('btnLogout').addEventListener('click', async ()=>{ await api('/api/logout',{method:'POST'}); state.currentUser=null; showLogin(); });
+document.getElementById('btnLogout').addEventListener('click', async ()=>{
+  try{ await api('/api/logout',{method:'POST'}); }catch(e){ /* tetap keluar secara lokal */ }
+  showLogin(); toast('Anda telah keluar','info');
+  document.getElementById('loginUser').value=''; document.getElementById('loginPass').value='';
+});
 document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',e=>{ e.preventDefault(); showPage(item.dataset.page); }));
 document.getElementById('menuToggle').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
 
@@ -152,15 +222,27 @@ document.getElementById('menuToggle').addEventListener('click',()=>document.getE
 document.getElementById('userMenu').addEventListener('click', e=>{ e.stopPropagation(); toggleUserDropdown(); });
 document.getElementById('btnGantiPass').addEventListener('click',()=>{ closeUserDropdown(); openGantiPass(); });
 document.addEventListener('click',()=>{ closeUserDropdown(); closeNotifDropdown(); });
-function toggleUserDropdown(){ const d=document.getElementById('userDropdown'); d.style.display = d.style.display==='none'?'block':'none'; }
-function closeUserDropdown(){ document.getElementById('userDropdown').style.display='none'; }
+function setDropdown(el, open){
+  if(!el) return;
+  if(open){ el.style.display='block'; requestAnimationFrame(()=>el.classList.add('open')); }
+  else { el.classList.remove('open'); el.style.display='none'; }
+}
+function toggleUserDropdown(){
+  const d=document.getElementById('userDropdown'); if(!d) return;
+  const open=!d.classList.contains('open');
+  closeNotifDropdown(); setDropdown(d, open);
+}
+function closeUserDropdown(){ setDropdown(document.getElementById('userDropdown'), false); }
 function openGantiPass(){ document.getElementById('gpLama').value='';document.getElementById('gpBaru').value='';document.getElementById('gpUlangi').value=''; openModal('modalGantiPass'); }
 document.getElementById('btnGantiPassSubmit').addEventListener('click', async ()=>{
   const lama=document.getElementById('gpLama').value, baru=document.getElementById('gpBaru').value, ulangi=document.getElementById('gpUlangi').value;
   if(!lama||!baru){ toast('Lengkapi semua field','error'); return; }
+  if(baru.length<6){ toast('Password baru minimal 6 karakter','error'); return; }
   if(baru!==ulangi){ toast('Password baru tidak sama','error'); return; }
+  const btn=document.getElementById('btnGantiPassSubmit'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
   try{ await api('/api/ganti-password',{method:'POST',body:{passwordLama:lama,passwordBaru:baru}}); toast('Password berhasil diganti','success'); closeModal('modalGantiPass'); }
   catch(err){ toast(err.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=old; }
 });
 
 /* ---- Notifikasi ---- */
@@ -188,14 +270,46 @@ window.notifClick=async function(id,refId){
   catch(e){}
   if(refId){ closeNotifDropdown(); showPage('arsip'); openDetail(refId); }
 };
-document.getElementById('btnNotif').addEventListener('click', e=>{ e.stopPropagation(); const d=document.getElementById('notifDropdown'); d.style.display=d.style.display==='none'?'block':'none'; });
-function closeNotifDropdown(){ document.getElementById('notifDropdown').style.display='none'; }
+document.getElementById('btnNotif').addEventListener('click', e=>{ e.stopPropagation(); const d=document.getElementById('notifDropdown'); if(!d) return; const open=!d.classList.contains('open'); closeUserDropdown(); setDropdown(d, open); });
+function closeNotifDropdown(){ setDropdown(document.getElementById('notifDropdown'), false); }
 document.getElementById('btnMarkReadAll').addEventListener('click', async e=>{ e.stopPropagation(); try{ await api('/api/notifikasi/read',{method:'POST',body:{all:true}}); loadNotifikasi(true); }catch(err){} });
 
 /* ============ MODAL ============ */
-function openModal(id){ const m=document.getElementById(id); if(!m)return; m.classList.remove('closing'); m.style.display='flex'; }
-function closeModal(id){ const m=document.getElementById(id); if(!m||m.style.display==='none')return; m.classList.add('closing'); setTimeout(()=>{ m.style.display='none'; m.classList.remove('closing'); },180); }
+let modalReturnFocus = null;
+function openModal(id){
+  const m=document.getElementById(id); if(!m) return;
+  modalReturnFocus = document.activeElement;
+  m.classList.remove('closing');
+  m.style.display='flex';
+  m.setAttribute('aria-hidden','false');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(()=>m.classList.add('open'));
+  const f=m.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+  if(f) setTimeout(()=>{ try{ f.focus({ preventScroll:true }); }catch(e){} }, 140);
+}
+function closeModal(id){
+  const m=document.getElementById(id);
+  if(!m || m.style.display==='none' || m.classList.contains('closing')) return;
+  m.classList.add('closing');
+  setTimeout(()=>{
+    m.style.display='none';
+    m.classList.remove('closing','open');
+    m.setAttribute('aria-hidden','true');
+    const anyOpen=[...document.querySelectorAll('.modal')].some(x=>x.style.display!=='none' && !x.classList.contains('closing'));
+    if(!anyOpen) document.body.classList.remove('modal-open');
+    if(modalReturnFocus && document.body.contains(modalReturnFocus)){
+      try{ modalReturnFocus.focus({ preventScroll:true }); }catch(e){}
+      modalReturnFocus=null;
+    }
+  }, 190);
+}
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{ if(e.target.classList.contains('modal-close')||e.target.classList.contains('modal-overlay')) closeModal(m.id); }));
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Escape') return;
+  const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display!=='none' && !m.classList.contains('closing'));
+  if(open.length){ closeModal(open[open.length-1].id); return; }
+  closeUserDropdown(); closeNotifDropdown();
+});
 
 /* ============ MASTER DATA DROPDOWNS ============ */
 async function ensureDropdowns(){
@@ -216,6 +330,41 @@ async function ensureDropdowns(){
   }catch(e){ toast(e.message,'error'); }
 }
 function fillSelect(id, arr, labelFn, placeholder=''){ const sel=document.getElementById(id); if(!sel) return; const cur=sel.value; sel.innerHTML=`<option value="">${placeholder||'— Pilih —'}</option>`+arr.map(x=>`<option value="${x.id}">${esc(labelFn(x))}</option>`).join(''); if(cur) sel.value=cur; }
+
+/* Daftar pengguna aktif untuk dropdown disposisi (tidak butuh akses admin) */
+async function ensureUserList(force){
+  if(!force && state.userList){ fillSelect('dispKepada', state.userList, x=>x.nama); return state.userList; }
+  try{
+    const list=await api('/api/users/ringkas');
+    state.userList=Array.isArray(list)?list:[];
+    fillSelect('dispKepada', state.userList, x=>x.nama);
+    return state.userList;
+  }catch(e){ toast(e.message,'error'); return state.userList||[]; }
+}
+/* Cache daftar arsip untuk selector disposisi/peminjaman */
+async function loadArsipOptions(force){
+  if(!force && state.arsipOptions) return state.arsipOptions;
+  const d=await api('/api/arsip?limit=500');
+  state.arsipOptions=d.data||[];
+  state.arsipOptionMap={};
+  state.arsipOptions.forEach(a=>{ state.arsipOptionMap[a.id]=a; });
+  return state.arsipOptions;
+}
+function renderArsipInfo(arsipId, infoId, emptyTitle, emptySub){
+  const el=document.getElementById(infoId); if(!el) return;
+  const a=arsipId?(state.arsipOptionMap||{})[arsipId]:null;
+  el.innerHTML=a?`<strong>${esc(a.nomor_arsip)}</strong><span>${esc(a.judul)}</span>`:`<strong>${esc(emptyTitle)}</strong><span>${esc(emptySub)}</span>`;
+}
+function bindArsipSelect(selId, hiddenId, infoId, emptyTitle, emptySub){
+  const sel=document.getElementById(selId); if(!sel || sel.dataset.bound) return;
+  sel.dataset.bound='1';
+  sel.addEventListener('change',()=>{
+    document.getElementById(hiddenId).value=sel.value;
+    renderArsipInfo(sel.value, infoId, emptyTitle, emptySub);
+  });
+}
+function refreshArsipIfBuilt(){ if(document.getElementById('arsipTableBody')) loadArsip(); }
+function refreshDashboardIfActive(){ if(state.currentPage==='dashboard') loadDashboard(); }
 
 /* ============ ANIMASI & UTIL ============ */
 function countUp(el, target, dur=950){
@@ -250,12 +399,13 @@ function renderDonut(elId, legendId, data, lab, val){
   const el=document.getElementById(elId), lg=document.getElementById(legendId); if(!el)return;
   if(!data||!data.length){ el.innerHTML='<div style="color:var(--muted-2);font-size:13px">Belum ada data</div>'; if(lg)lg.innerHTML=''; return; }
   const total=Math.max(data.reduce((s,d)=>s+val(d),0),1);
+  const colorOf=d=>{ const key=String(lab(d)).toLowerCase(); return (STATUS_COLOR[key]&&STATUS_COLOR[key][0])||'#7d8b83'; };
   const R=70, C=2*Math.PI*R; let acc=0;
-  const segs=data.map(d=>{ const len=C*(val(d)/total); const off=acc; acc+=len; const c=(STATUS_COLOR[lab(d)]&&STATUS_COLOR[lab(d)][0])||'#7d8b83';
-    return `<circle cx="100" cy="100" r="${R}" fill="none" stroke="${c}" stroke-width="22" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}"/>`; }).join('');
+  const segs=data.map(d=>{ const len=C*(val(d)/total); const off=acc; acc+=len;
+    return `<circle cx="100" cy="100" r="${R}" fill="none" stroke="${colorOf(d)}" stroke-width="22" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}"/>`; }).join('');
   el.innerHTML=`<svg viewBox="0 0 200 200" width="188" height="188" style="transform:rotate(-90deg)">${segs}</svg>
     <div class="donut-center"><strong>${total}</strong><span>Total Arsip</span></div>`;
-  if(lg) lg.innerHTML=data.map(d=>{ const c=(STATUS_COLOR[lab(d)]&&STATUS_COLOR[lab(d)][0])||'#7d8b83'; const pct=Math.round(val(d)/total*100); return `<div class="lg-row"><span class="lg-dot" style="background:${c}"></span><span class="lg-name">${esc(lab(d))}</span><span class="lg-pct">${pct}%</span><span class="lg-val">${val(d)}</span></div>`; }).join('');
+  if(lg) lg.innerHTML=data.map(d=>{ const pct=Math.round(val(d)/total*100); return `<div class="lg-row"><span class="lg-dot" style="background:${colorOf(d)}"></span><span class="lg-name">${esc(lab(d))}</span><span class="lg-pct">${pct}%</span><span class="lg-val">${val(d)}</span></div>`; }).join('');
 }
 
 /* ============ DASHBOARD ============ */
@@ -368,10 +518,12 @@ async function loadArsip(){
   const f=state.filters;
   const p=new URLSearchParams({page:state.arsipPage,limit:state.arsipLimit,search:f.search,kategori:f.kategori,status:f.status,tanggal_dari:f.dari,tanggal_sampai:f.sampai,lokasi:f.lokasi,instansi:f.instansi});
   try{
-    const d=await api('/api/arsip?'+p); const tb=document.getElementById('arsipTableBody'); const canDel=isAdminUser();
-    if(!d.data.length){ tb.innerHTML='<tr><td colspan="8" class="empty-state">Tidak ada data arsip</td></tr>'; }
+    const d=await api('/api/arsip?'+p); const tb=document.getElementById('arsipTableBody'); if(!tb) return; const canDel=canManage();
+    if(d.total>0 && state.arsipPage>(d.totalPages||1)){ state.arsipPage=d.totalPages||1; return loadArsip(); }
+    const rows=d.data||[];
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="8" class="empty-state">Tidak ada data arsip</td></tr>'; }
     else{ let i=(state.arsipPage-1)*state.arsipLimit+1;
-      tb.innerHTML=d.data.map(a=>`<tr><td>${i++}</td><td class="mono strong">${esc(a.nomor_arsip)}</td><td><span class="tag">${esc(a.kategori_kode)}</span></td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDate(a.tanggal_arsip)}</td><td>${esc(a.lokasi_kode||'-')}</td><td><span class="badge badge-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td><td class="th-actions"><div class="cell-actions">
+      tb.innerHTML=rows.map(a=>`<tr><td>${i++}</td><td class="mono strong">${esc(a.nomor_arsip)}</td><td><span class="tag">${esc(a.kategori_kode)}</span></td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDate(a.tanggal_arsip)}</td><td>${esc(a.lokasi_kode||'-')}</td><td><span class="badge badge-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td><td class="th-actions"><div class="cell-actions">
         <button class="icon-btn" onclick="openDetail(${a.id})" title="Detail">${ICONS.eye}</button>
         <button class="icon-btn" onclick="editArsip(${a.id})" title="Edit">${ICONS.edit}</button>
         <button class="icon-btn" onclick="showQr(${a.id})" title="QR">${ICONS.qr}</button>
@@ -389,7 +541,7 @@ function renderPagination(id,tp,cur,cb){ const el=document.getElementById(id); i
   h+=`<button class="pg-btn" data-n="${cur+1}" ${cur>=tp?'disabled':''}>›</button>`; el.innerHTML=h;
   el.querySelectorAll('button[data-n]').forEach(b=>b.addEventListener('click',()=>cb(parseInt(b.dataset.n)))); }
 
-function openTambahArsip(){ document.getElementById('formArsip').reset(); document.getElementById('arsipId').value=''; document.getElementById('arsipTanggalArsip').value=new Date().toISOString().split('T')[0]; document.getElementById('modalArsipTitle').textContent='Tambah Arsip'; openModal('modalArsip'); }
+function openTambahArsip(){ document.getElementById('formArsip').reset(); document.getElementById('arsipId').value=''; document.getElementById('arsipTanggalArsip').value=todayLocal(); document.getElementById('modalArsipTitle').textContent='Tambah Arsip'; openModal('modalArsip'); }
 window.editArsip=async function(id){ try{ const d=await api('/api/arsip/'+id);
   document.getElementById('arsipId').value=d.id; document.getElementById('arsipKategori').value=d.kategori_id; document.getElementById('arsipStatus').value=d.status;
   document.getElementById('arsipJudul').value=d.judul; document.getElementById('arsipNomorSurat').value=d.nomor_surat||''; document.getElementById('arsipTanggalSurat').value=d.tanggal_surat||'';
@@ -406,20 +558,24 @@ document.getElementById('btnSimpanArsip').addEventListener('click', async ()=>{
     lokasi_fisik:document.getElementById('arsipLokasi').value.trim(), lokasi_id:document.getElementById('arsipLokasiSel').value };
   if(!b.kategori_id||!b.judul||!b.tanggal_arsip){ toast('Kategori, judul, dan tanggal wajib','error'); return; }
   try{ if(id){ await api('/api/arsip/'+id,{method:'PUT',body:b}); toast('Arsip diperbarui','success'); } else { const r=await api('/api/arsip',{method:'POST',body:b}); toast('Arsip dibuat: '+r.nomor_arsip,'success'); }
-    closeModal('modalArsip'); loadArsip(); }catch(e){ toast(e.message,'error'); }
+    state.arsipOptions=null; closeModal('modalArsip'); loadArsip(); }catch(e){ toast(e.message,'error'); }
 });
-window.delArsip=async function(id){ if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); loadArsip(); }catch(e){ toast(e.message,'error'); } };
+window.delArsip=async function(id){ if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); state.arsipOptions=null; loadArsip(); }catch(e){ toast(e.message,'error'); } };
 
 /* ---- DETAIL ---- */
 window.openDetail=async function(id){
-  try{ const d=await api('/api/arsip/'+id); const can=isAdmin();
-    const disp=d.disposisi&&d.disposisi.length?d.disposisi.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.instruksi||'Disposisi')}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_disposisi)} · ${esc(x.dari_nama||'-')} → ${esc(x.kepada_nama||'-')}</div></div><span class="badge badge-${x.status}">${x.status}</span></div>`).join(''):'<div class="empty-state">Belum ada disposisi</div>';
-    const pinj=d.peminjaman&&d.peminjaman.length?d.peminjaman.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.peminjam)}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_pinjam)} → ${formatDate(x.tanggal_jatuh_tempo)}${x.tanggal_kembali?' · kembali '+formatDate(x.tanggal_kembali):''}</div></div><span class="badge badge-${x.status}">${x.status}</span></div>`).join(''):'<div class="empty-state">Belum ada peminjaman</div>';
+  try{
+    const d=await api('/api/arsip/'+id); const can=canManage();
+    state.detailId=d.id;
+    const lampiran=Array.isArray(d.lampiran)?d.lampiran:[];
+    const disp=d.disposisi&&d.disposisi.length?d.disposisi.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.instruksi||'Disposisi')}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_disposisi)} · ${esc(x.dari_nama||'-')} → ${esc(x.kepada_nama||'-')}</div></div><span class="badge badge-${x.status}">${esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada disposisi</div>';
+    const pinj=d.peminjaman&&d.peminjaman.length?d.peminjaman.map(x=>`<div class="file-item"><div style="min-width:0;flex:1"><div style="font-weight:600;font-size:14px">${esc(x.peminjam)}</div><div style="font-size:12.5px;color:var(--muted)">${formatDate(x.tanggal_pinjam)} → ${formatDate(x.tanggal_jatuh_tempo)}${x.tanggal_kembali?' · kembali '+formatDate(x.tanggal_kembali):''}</div></div><span class="badge badge-${x.status}">${esc(x.status)}</span></div>`).join(''):'<div class="empty-state">Belum ada peminjaman</div>';
+    const kategoriKode=d.kategori_kode||'?';
     document.getElementById('detailContent').innerHTML=`
-    <div class="detail-hero"><div class="user-avatar" style="flex-shrink:0">${esc(d.kategori_kode.charAt(0))}</div><div><div class="dh-title">${esc(d.judul)}</div><div class="dh-sub">${esc(d.nomor_arsip)}</div></div></div>
+    <div class="detail-hero"><div class="user-avatar" style="flex-shrink:0">${esc(String(kategoriKode).charAt(0))}</div><div><div class="dh-title">${esc(d.judul)}</div><div class="dh-sub">${esc(d.nomor_arsip)}</div></div></div>
     <div class="detail-grid">
       <div class="detail-label">Nomor Arsip</div><div class="detail-value mono strong">${esc(d.nomor_arsip)}</div>
-      <div class="detail-label">Kategori</div><div class="detail-value">${esc(d.kategori_kode)} — ${esc(d.kategori_nama)}</div>
+      <div class="detail-label">Kategori</div><div class="detail-value">${esc(kategoriKode)} — ${esc(d.kategori_nama||'-')}</div>
       <div class="detail-label">Nomor Surat</div><div class="detail-value">${esc(d.nomor_surat||'-')}</div>
       <div class="detail-label">Tanggal Surat</div><div class="detail-value">${formatDate(d.tanggal_surat)}</div>
       <div class="detail-label">Tanggal Arsip</div><div class="detail-value">${formatDate(d.tanggal_arsip)}</div>
@@ -427,80 +583,110 @@ window.openDetail=async function(id){
       <div class="detail-label">Penerima</div><div class="detail-value">${esc(d.penerima||'-')}${d.unit_nama?' <span class="chip">'+esc(d.unit_nama)+'</span>':''}</div>
       <div class="detail-label">Perihal</div><div class="detail-value">${esc(d.perihal||'-')}</div>
       <div class="detail-label">Ringkasan</div><div class="detail-value">${esc(d.ringkasan||'-')}</div>
-      <div class="detail-label">Status</div><div class="detail-value"><span class="badge badge-${d.status}">${STATUS_LABEL[d.status]||d.status}</span></div>
+      <div class="detail-label">Status</div><div class="detail-value"><span class="badge badge-${d.status}">${STATUS_LABEL[d.status]||esc(d.status)}</span></div>
       <div class="detail-label">Lokasi</div><div class="detail-value">${d.lokasi_nama?esc(d.lokasi_nama):esc(d.lokasi_fisik||'-')}</div>
-      <div class="detail-label">Dibuat</div><div class="detail-value">oleh ${esc(d.creator_nama)} · ${formatDateTime(d.created_at)}</div>
+      <div class="detail-label">Dibuat</div><div class="detail-value">oleh ${esc(d.creator_nama||'-')} · ${formatDateTime(d.created_at)}</div>
     </div>
-    <div class="detail-actions" style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap">
+    <div class="detail-actions no-print" style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="showQr(${d.id})">${ICONS.qr} QR</button>
+      <button class="btn btn-ghost" onclick="openLampiran(${d.id})">${ICONS.clip} Lampiran</button>
       <button class="btn btn-ghost" onclick="openDisposisiModal(${d.id})">${ICONS.plus} Disposisi</button>
       <button class="btn btn-ghost" onclick="openPeminjamanModal(${d.id})">${ICONS.plus} Pinjam</button>
-      <button class="btn btn-ghost no-print" onclick="window.print()">Cetak</button>
+      <button class="btn btn-ghost" onclick="printDetail()">Cetak</button>
     </div>
     <div class="detail-section"><h4>Disposisi</h4>${disp}</div>
     <div class="detail-section"><h4>Riwayat Peminjaman</h4>${pinj}</div>
-    <div class="detail-section"><h4>Lampiran (${d.lampiran.length})</h4>${d.lampiran.length===0?'<div class="empty-state">Belum ada lampiran</div>':d.lampiran.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLamp(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('')}</div>`;
+    <div class="detail-section"><h4>Lampiran (${lampiran.length})</h4>${lampiran.length===0?'<div class="empty-state">Belum ada lampiran</div>':lampiran.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions no-print"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLamp(${l.id},${d.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('')}</div>`;
     openModal('modalDetail');
   }catch(e){ toast(e.message,'error'); }
 };
-window.delLamp=async function(id){ if(!confirm('Hapus lampiran?'))return; try{ await api('/api/lampiran/'+id,{method:'DELETE'}); toast('Lampiran dihapus','success'); }catch(e){ toast(e.message,'error'); } };
+window.printDetail=function(){
+  document.body.classList.add('print-detail');
+  const done=()=>{ document.body.classList.remove('print-detail'); window.removeEventListener('afterprint',done); };
+  window.addEventListener('afterprint',done);
+  setTimeout(()=>window.print(),60);
+};
+window.delLamp=async function(id, arsipId){ if(!confirm('Hapus lampiran?'))return; try{ await api('/api/lampiran/'+id,{method:'DELETE'}); toast('Lampiran dihapus','success'); if(arsipId && state.detailId) openDetail(arsipId); }catch(e){ toast(e.message,'error'); } };
 
 /* ---- DISPOSISI ---- */
 function buildDisposisiLayout(){ const sec=document.getElementById('page-disposisi'); if(sec.dataset.built)return; sec.dataset.built=1;
   sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Tanggal</th><th>Arsip</th><th>Dari</th><th>Kepada</th><th>Instruksi</th><th>Status</th><th class="th-actions">Aksi</th></tr></thead><tbody id="disposisiBody"><tr><td colspan="7" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`; }
 async function loadDisposisi(){
   try{
-    const list=await api('/api/arsip?limit=9999'); const rows=[]; const ids=list.data.map(a=>a.id);
-    // Ambil disposisi per arsip yang punya
-    for(const id of ids){ const d=await api('/api/arsip/'+id); if(d.disposisi&&d.disposisi.length){ d.disposisi.forEach(x=>rows.push({...x, nomor_arsip:d.nomor_arsip})); } }
-    rows.sort((a,b)=>b.id-a.id);
+    const rows=(await api('/api/disposisi'))||[];
     state.dispMap={}; rows.forEach(r=>state.dispMap[r.id]=r);
-    const tb=document.getElementById('disposisiBody');
+    const tb=document.getElementById('disposisiBody'); if(!tb) return;
     if(!rows.length){ tb.innerHTML='<tr><td colspan="7" class="empty-state">Belum ada disposisi</td></tr>'; return; }
-    tb.innerHTML=rows.map(x=>`<tr><td>${formatDate(x.tanggal_disposisi)}</td><td class="mono strong">${esc(x.nomor_arsip)}</td><td>${esc(x.dari_nama||'-')}</td><td>${esc(x.kepada_nama||'-')}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(x.instruksi||'-')}</td><td><span class="badge badge-${x.status}">${x.status}</span></td><td class="th-actions"><div class="cell-actions"><button class="icon-btn" onclick="openDisposisiModal(0,${x.id})" title="Edit">${ICONS.edit}</button>${isAdmin()?`<button class="icon-btn danger" onclick="delDisp(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></td></tr>`).join('');
+    const me=state.currentUser&&state.currentUser.id;
+    tb.innerHTML=rows.map(x=>{
+      const bolehEdit=isAdmin()||x.dari_user===me||x.kepada_user===me;
+      const aksi=`${bolehEdit?`<button class="icon-btn" onclick="openDisposisiModal(0,${x.id})" title="Edit">${ICONS.edit}</button>`:''}${canManage()?`<button class="icon-btn danger" onclick="delDisp(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}`;
+      return `<tr><td>${formatDate(x.tanggal_disposisi)}</td><td><span class="mono strong">${esc(x.nomor_arsip||'-')}</span><div style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.arsip_judul||'')}">${esc(x.arsip_judul||'')}</div></td><td>${esc(x.dari_nama||'-')}</td><td>${esc(x.kepada_nama||'-')}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.instruksi||'')}">${esc(x.instruksi||'-')}</td><td><span class="badge badge-${x.status}">${esc(x.status)}</span></td><td class="th-actions"><div class="cell-actions">${aksi||'<span style="color:var(--muted-2)">—</span>'}</div></td></tr>`;
+    }).join('');
   }catch(e){ toast(e.message,'error'); }
 }
-window.delDisp=async function(id){ if(!confirm('Hapus disposisi?'))return; try{ await api('/api/disposisi/'+id,{method:'DELETE'}); loadDisposisi(); toast('Disposisi dihapus','success'); }catch(e){ toast(e.message,'error'); } };
+window.delDisp=async function(id){ if(!confirm('Hapus disposisi?'))return; try{ await api('/api/disposisi/'+id,{method:'DELETE'}); toast('Disposisi dihapus','success'); loadDisposisi(); if(state.detailId) openDetail(state.detailId); }catch(e){ toast(e.message,'error'); } };
 async function openDisposisiModal(arsipId, x){
-  ensureDropdowns();
   if(typeof x==='number') x=state.dispMap&&state.dispMap[x];
-  document.getElementById('dispId').value=x&&x.id?x.id:'';
-  document.getElementById('dispArsipId').value=(x&&x.arsip_id)?x.arsip_id:(arsipId||'');
-  document.getElementById('dispInstruksi').value=x&&x.instruksi?x.instruksi:'';
-  document.getElementById('dispCatatan').value=x&&x.catatan?x.catatan:'';
-  document.getElementById('dispTanggal').value=x&&x.tanggal_disposisi?x.tanggal_disposisi:new Date().toISOString().split('T')[0];
-  document.getElementById('dispStatus').value=x&&x.status?x.status:'proses';
-  fillSelect('dispKepada',Object.values(state.userMap),x=>x.nama);
-  if(x&&x.kepada_user) document.getElementById('dispKepada').value=x.kepada_user;
-  if(arsipId||(x&&x.arsip_id)){ try{ const d=await api('/api/arsip/'+((x&&x.arsip_id)||arsipId)); document.getElementById('dispArsipInfo').innerHTML=`<strong>${esc(d.nomor_arsip)}</strong><span>${esc(d.judul)}</span>`; }catch(e){} }
-  else document.getElementById('dispArsipInfo').innerHTML='<strong>Pilih Arsip</strong><span>Disposisi baru</span>';
+  const edit=!!(x&&x.id);
+  const setVal=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  setVal('dispId', edit?x.id:'');
+  setVal('dispInstruksi', x&&x.instruksi?x.instruksi:'');
+  setVal('dispCatatan', x&&x.catatan?x.catatan:'');
+  setVal('dispTanggal', x&&x.tanggal_disposisi?x.tanggal_disposisi:todayLocal());
+  setVal('dispStatus', x&&x.status?x.status:'proses');
+  const title=document.querySelector('#modalDisposisi .modal-head h3'); if(title) title.textContent=edit?'Edit Disposisi':'Disposisi Arsip';
+  try{
+    const list=await loadArsipOptions();
+    const sel=document.getElementById('dispArsipSel'), field=document.getElementById('dispArsipField');
+    if(sel){ fillSelect('dispArsipSel',list,a=>`${a.nomor_arsip} — ${a.judul}`,'— Pilih arsip —'); sel.disabled=edit; }
+    const aid=edit?x.arsip_id:(arsipId||'');
+    if(sel && aid) sel.value=String(aid);
+    document.getElementById('dispArsipId').value=aid||'';
+    if(field) field.style.display=edit?'none':'';
+    bindArsipSelect('dispArsipSel','dispArsipId','dispArsipInfo','Pilih Arsip','Disposisi baru');
+  }catch(e){ toast(e.message,'error'); }
+  await ensureUserList();
+  const kepadaEl=document.getElementById('dispKepada');
+  if(kepadaEl) kepadaEl.value=(x&&x.kepada_user)?String(x.kepada_user):'';
+  const aidFinal=(x&&x.arsip_id)||arsipId;
+  renderArsipInfo(aidFinal,'dispArsipInfo','Pilih Arsip','Disposisi baru');
+  if(edit) document.getElementById('dispArsipInfo').innerHTML=`<strong>${esc(x.nomor_arsip||'-')}</strong><span>${esc(x.arsip_judul||'')}</span>`;
   openModal('modalDisposisi');
 }
 
 /* ---- PEMINJAMAN ---- */
 function buildPeminjamanLayout(){ const sec=document.getElementById('page-peminjaman'); if(sec.dataset.built)return; sec.dataset.built=1;
   sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Arsip</th><th>Peminjam</th><th>Unit</th><th>Pinjam</th><th>Jatuh Tempo</th><th>Kembali</th><th>Status</th><th class="th-actions">Aksi</th></tr></thead><tbody id="peminjamanBody"><tr><td colspan="8" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`; }
-async function loadPeminjaman(){ try{ const list=await api('/api/peminjaman'); const tb=document.getElementById('peminjamanBody'); if(!list.length){tb.innerHTML='<tr><td colspan="8" class="empty-state">Belum ada peminjaman</td></tr>';return;}
-  tb.innerHTML=list.map(x=>`<tr><td class="mono strong">${esc(x.nomor_arsip)}</td><td>${esc(x.peminjam)}</td><td>${esc(x.unit_peminjam||'-')}</td><td>${formatDate(x.tanggal_pinjam)}</td><td>${formatDate(x.tanggal_jatuh_tempo)}</td><td>${x.tanggal_kembali?formatDate(x.tanggal_kembali):'-'}</td><td><span class="badge badge-${x.status}">${STATUS_LABEL[x.status]||x.status}</span></td><td class="th-actions"><div class="cell-actions">
+async function loadPeminjaman(){ try{ const list=(await api('/api/peminjaman'))||[]; const tb=document.getElementById('peminjamanBody'); if(!tb) return; if(!list.length){tb.innerHTML='<tr><td colspan="8" class="empty-state">Belum ada peminjaman</td></tr>';return;}
+  tb.innerHTML=list.map(x=>`<tr><td><span class="mono strong">${esc(x.nomor_arsip)}</span><div style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.judul||'')}">${esc(x.judul||'')}</div></td><td>${esc(x.peminjam)}</td><td>${esc(x.unit_nama||x.unit_peminjam||'-')}</td><td>${formatDate(x.tanggal_pinjam)}</td><td>${formatDate(x.tanggal_jatuh_tempo)}</td><td>${x.tanggal_kembali?formatDate(x.tanggal_kembali):'-'}</td><td><span class="badge badge-${x.status}">${STATUS_LABEL[x.status]||esc(x.status)}</span></td><td class="th-actions"><div class="cell-actions">
     ${x.status==='dipinjam'||x.status==='terlambat'?`<button class="btn btn-sm btn-success" onclick="kembaliPinjam(${x.id})">Kembalikan</button>`:''}
-    ${isAdmin()?`<button class="icon-btn danger" onclick="delPinjam(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}
+    ${canManage()?`<button class="icon-btn danger" onclick="delPinjam(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}
   </div></td></tr>`).join(''); }catch(e){ toast(e.message,'error'); } }
-window.delPinjam=async function(id){ if(!confirm('Hapus catatan peminjaman?'))return; try{ await api('/api/peminjaman/'+id,{method:'DELETE'}); loadPeminjaman(); toast('Dihapus','success'); }catch(e){ toast(e.message,'error'); } };
-window.kembaliPinjam=async function(id){ if(!confirm('Tandai arsip telah dikembalikan?'))return; try{ await api('/api/peminjaman/'+id,{method:'PUT',body:{status:'dikembalikan'}}); toast('Arsip dikembalikan','success'); loadPeminjaman(); loadArsip(); }catch(e){ toast(e.message,'error'); } };
+window.delPinjam=async function(id){ if(!confirm('Hapus catatan peminjaman?'))return; try{ await api('/api/peminjaman/'+id,{method:'DELETE'}); toast('Dihapus','success'); loadPeminjaman(); refreshArsipIfBuilt(); if(state.detailId) openDetail(state.detailId); }catch(e){ toast(e.message,'error'); } };
+window.kembaliPinjam=async function(id){ if(!confirm('Tandai arsip telah dikembalikan?'))return; try{ await api('/api/peminjaman/'+id,{method:'PUT',body:{status:'dikembalikan'}}); toast('Arsip dikembalikan','success'); loadPeminjaman(); refreshArsipIfBuilt(); if(state.detailId) openDetail(state.detailId); }catch(e){ toast(e.message,'error'); } };
 async function openPeminjamanModal(arsipId){
-  ensureDropdowns();
-  document.getElementById('pinjamArsipId').value=arsipId||'';
-  document.getElementById('pinjamNama').value=''; document.getElementById('pinjamAlasan').value=''; document.getElementById('pinjamCatatan').value='';
-  const today=new Date(); const plus=new Date(today); plus.setDate(plus.getDate()+7);
-  document.getElementById('pinjamTglPinjam').value=today.toISOString().split('T')[0];
-  document.getElementById('pinjamTglTempo').value=plus.toISOString().split('T')[0];
-  fillSelect('pinjamUnit',Object.values(state.unitMap),x=>`${x.kode} — ${x.nama}`);
-  if(arsipId){ try{ const d=await api('/api/arsip/'+arsipId); document.getElementById('pinjamArsipInfo').innerHTML=`<strong>${esc(d.nomor_arsip)}</strong><span>${esc(d.judul)}</span>`; }catch(e){} }
-  else document.getElementById('pinjamArsipInfo').innerHTML='<strong>Pilih Arsip</strong><span>Catat peminjaman baru</span>';
+  const setVal=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  setVal('pinjamArsipId',arsipId||'');
+  setVal('pinjamNama',''); setVal('pinjamAlasan',''); setVal('pinjamCatatan','');
+  const plus=new Date(); plus.setDate(plus.getDate()+7);
+  setVal('pinjamTglPinjam',todayLocal());
+  setVal('pinjamTglTempo',todayLocal(plus));
+  try{
+    const list=await loadArsipOptions();
+    const sel=document.getElementById('pinjamArsipSel');
+    if(sel){ fillSelect('pinjamArsipSel',list,a=>`${a.nomor_arsip} — ${a.judul}`,'— Pilih arsip —'); if(arsipId) sel.value=String(arsipId); }
+    bindArsipSelect('pinjamArsipSel','pinjamArsipId','pinjamArsipInfo','Pilih Arsip','Catat peminjaman baru');
+  }catch(e){ toast(e.message,'error'); }
+  await ensureDropdowns();
+  setVal('pinjamUnit','');
+  renderArsipInfo(arsipId,'pinjamArsipInfo','Pilih Arsip','Catat peminjaman baru');
   openModal('modalPeminjaman');
 }
 
 /* ---- KATEGORI ---- */
+function buildKategoriLayout(){ const sec=document.getElementById('page-kategori'); if(sec.dataset.built)return; sec.dataset.built=1;
+  sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Kode</th><th>Nama Kategori</th><th>Deskripsi</th><th class="th-actions">Aksi</th></tr></thead><tbody id="kategoriTableBody"><tr><td colspan="4" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`; }
 async function loadKategoriPage(){ try{ const d=await getKategori(); const tb=document.getElementById('kategoriTableBody'); if(!tb)return; if(!d.length){tb.innerHTML='<tr><td colspan="4" class="empty-state">Belum ada kategori</td></tr>';return;}
   tb.innerHTML=d.map(k=>`<tr><td><span class="tag">${esc(k.kode)}</span></td><td class="strong">${esc(k.nama)}</td><td style="max-width:320px;overflow:hidden;text-overflow:ellipsis">${esc(k.deskripsi||'-')}</td><td class="th-actions"><div class="cell-actions">${isAdmin()?`<button class="icon-btn" onclick="editKategori(${k.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delKategori(${k.id})" title="Hapus">${ICONS.trash}</button>`:'<span style="color:var(--muted-2)">—</span>'}</div></td></tr>`).join('');
   }catch(e){ toast(e.message,'error'); }
@@ -525,10 +711,10 @@ function buildMasterLayout(){ const sec=document.getElementById('page-master'); 
 async function loadMaster(){ const t=state.masterTab; const area=document.getElementById('masterListArea'); if(!area)return;
   try{
     let data, fields='';
-    if(t==='lokasi'){ data=await api('/api/lokasi'); }
-    else if(t==='unit'){ data=await api('/api/unit'); }
-    else { data=await api('/api/instansi'); }
-    const can=isAdmin();
+    if(t==='lokasi'){ data=await api('/api/lokasi'); state.lokasiMap={}; data.forEach(x=>state.lokasiMap[x.id]=x); }
+    else if(t==='unit'){ data=await api('/api/unit'); state.unitMap={}; data.forEach(x=>state.unitMap[x.id]=x); }
+    else { data=await api('/api/instansi'); state.instansiMap={}; data.forEach(x=>state.instansiMap[x.id]=x); }
+    const can=canManage();
     const rows=data.map(x=>{
       let name=x.nama, sub=''; if(t==='lokasi'){name=`${x.kode} — ${x.nama}`; sub=x.keterangan||'';} else if(t==='unit'){name=`${x.kode} — ${x.nama}`;} else {name=x.nama; sub=x.singkatan||'';}
       const statusTxt=x.aktif?'Aktif':'Nonaktif';
@@ -536,7 +722,7 @@ async function loadMaster(){ const t=state.masterTab; const area=document.getEle
         ${can?`<button class="icon-btn" onclick="editMaster(${x.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delMaster(${x.id})" title="Hapus">${ICONS.trash}</button>`:`<span class="m-status" style="color:var(--muted-2)">${statusTxt}</span>`}
       </div></div>`;
     }).join('');
-    fields=`<button id="btnAddMaster" class="btn btn-primary" onclick="openMasterModal()">${ICONS.plus} Tambah ${t==='lokasi'?'Lokasi':t==='unit'?'Unit':'Instansi'}</button>`+(can?'': '');
+    fields=can?`<button id="btnAddMaster" class="btn btn-primary" onclick="openMasterModal()">${ICONS.plus} Tambah ${t==='lokasi'?'Lokasi':t==='unit'?'Unit':'Instansi'}</button>`:'';
     area.innerHTML=fields+`<div style="margin-top:14px">${data.length?rows:'<div class="empty-state" style="background:#fff;border:1px solid var(--line);border-radius:10px">Belum ada data</div>'}</div>`;
   }catch(e){ toast(e.message,'error'); }
 }
@@ -569,21 +755,55 @@ document.getElementById('btnSimpanMaster').addEventListener('click',async()=>{ c
 });
 
 /* ============ USERS ============ */
-async function loadUsersPage(){ try{ const d=await api('/api/users'); const tb=document.getElementById('usersBody'); if(!tb)return; state.userMap={}; d.forEach(u=>state.userMap[u.id]=u);
+async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('/api/users'))||[]; const tb=document.getElementById('usersBody'); if(!tb)return; state.userMap={}; d.forEach(u=>state.userMap[u.id]=u);
   const roleNames={admin:'Administrator',staff:'Staf',kepala:'Kepala'};
-  tb.innerHTML=d.map(u=>`<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip">${roleNames[u.role]||u.role}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
+  tb.innerHTML=d.map(u=>`<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip">${roleNames[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
   </div></td></tr>`).join('');
   }catch(e){ toast(e.message,'error'); } }
 function buildUsersLayout(){ const sec=document.getElementById('page-users'); if(sec.innerHTML.trim())return; sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`; }
-function openTambahUser(){ document.getElementById('userId').value='';document.getElementById('uUsername').value='';document.getElementById('uNama').value='';document.getElementById('uRole').value='staff';document.getElementById('uPassword').value='';document.getElementById('userTitle').textContent='Tambah Pengguna';document.getElementById('uPassField').style.display='block';document.getElementById('uAktifField').style.display='none';openModal('modalUser'); }
-window.editUser=function(id){ const u=state.userMap[id]; if(!u)return; document.getElementById('userId').value=u.id;document.getElementById('uUsername').value=u.username;document.getElementById('uUsername').disabled=true;document.getElementById('uNama').value=u.nama;document.getElementById('uRole').value=u.role;document.getElementById('uAktif').value=String(u.aktif);document.getElementById('userTitle').textContent='Edit Pengguna';document.getElementById('uPassField').style.display='none';document.getElementById('uAktifField').style.display='block';openModal('modalUser'); };
-window.resetPass=async function(id){ const p=prompt('Password baru (min 6 karakter):'); if(!p)return; try{ await api('/api/users/'+id+'/reset-password',{method:'POST',body:{password:p}}); toast('Password direset','success'); loadUsersPage(); }catch(e){ toast(e.message,'error'); } };
-document.getElementById('btnSimpanUser').addEventListener('click',async()=>{ const id=document.getElementById('userId').value;
-  if(id){ const b={nama:document.getElementById('uNama').value,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'}; await api('/api/users/'+id,{method:'PUT',body:b}); toast('Pengguna diperbarui','success'); }
-  else{ const b={username:document.getElementById('uUsername').value.trim(),nama:document.getElementById('uNama').value,role:document.getElementById('uRole').value,password:document.getElementById('uPassword').value}; await api('/api/users',{method:'POST',body:b}); toast('Pengguna ditambahkan','success'); }
-  closeModal('modalUser'); loadUsersPage(); });
+function openTambahUser(){
+  document.getElementById('userId').value='';
+  const un=document.getElementById('uUsername'); un.value=''; un.disabled=false;
+  document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff'; document.getElementById('uPassword').value='';
+  document.getElementById('userTitle').textContent='Tambah Pengguna';
+  document.getElementById('uPassField').style.display='block'; document.getElementById('uAktifField').style.display='none';
+  openModal('modalUser');
+}
+window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
+  document.getElementById('userId').value=u.id;
+  const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
+  document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
+  document.getElementById('uAktif').value=String(u.aktif);
+  document.getElementById('userTitle').textContent='Edit Pengguna';
+  document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
+  openModal('modalUser');
+};
+window.resetPass=async function(id){ const p=prompt('Password baru (min 6 karakter):'); if(!p) return; if(p.length<6){ toast('Password minimal 6 karakter','error'); return; }
+  try{ await api('/api/users/'+id+'/reset-password',{method:'POST',body:{password:p}}); toast('Password direset','success'); loadUsersPage(); }catch(e){ toast(e.message,'error'); } };
+document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
+  const id=document.getElementById('userId').value;
+  const nama=document.getElementById('uNama').value.trim();
+  if(!nama){ toast('Nama lengkap wajib diisi','error'); return; }
+  const btn=document.getElementById('btnSimpanUser'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
+  try{
+    if(id){
+      const b={nama,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'};
+      await api('/api/users/'+id,{method:'PUT',body:b}); toast('Pengguna diperbarui','success');
+    } else {
+      const username=document.getElementById('uUsername').value.trim();
+      const password=document.getElementById('uPassword').value;
+      if(!username){ toast('Username wajib diisi','error'); return; }
+      if(password.length<6){ toast('Password minimal 6 karakter','error'); return; }
+      await api('/api/users',{method:'POST',body:{username,nama,role:document.getElementById('uRole').value,password}});
+      toast('Pengguna ditambahkan','success');
+    }
+    state.userList=null;
+    closeModal('modalUser'); loadUsersPage();
+  }catch(e){ toast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+});
 window.initUsersPage=buildUsersLayout;
 
 /* ============ LAPORAN ============ */
@@ -597,7 +817,7 @@ function buildLaporanLayout(){ const sec=document.getElementById('page-laporan')
     <div class="report-actions">
       <button id="repExport" class="btn btn-ghost">Ekspor CSV</button>
       <button id="repExportXlsx" class="btn btn-gold">Ekspor Excel (.xlsx)</button>
-      ${isAdmin()?`<button id="repImport" class="btn btn-ghost">Import CSV</button>`:''}
+      ${canManage()?`<button id="repImport" class="btn btn-ghost">Import CSV</button>`:''}
     </div>
     <div class="no-print panel filter-bar" style="background:var(--gold-soft);border-color:#eadfbe;padding:10px 16px"><span style="font-size:12.5px;color:#8a6d2f">Laporan dicetak dengan kop surat sesuai Profil Kantor. Kelola di menu <b>Profil Kantor</b>.</span></div>
     <div id="repArea"></div>`;
@@ -628,13 +848,13 @@ async function exportCsv(){ try{ const dari=document.getElementById('repDari').v
 /* ============ SAMPAH ============ */
 function buildSampahLayout(){ const sec=document.getElementById('page-sampah'); if(sec.dataset.built)return; sec.dataset.built=1;
   sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nomor</th><th>Judul</th><th>Dihapus Pada</th><th class="th-actions">Aksi</th></tr></thead><tbody id="sampahBody"><tr><td colspan="4" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`; }
-async function loadSampah(){ try{ const d=await api('/api/trash'); const tb=document.getElementById('sampahBody'); if(!tb)return; if(!d.length){tb.innerHTML='<tr><td colspan="4" class="empty-state">Tempat sampah kosong</td></tr>';return;}
-  tb.innerHTML=d.map(a=>`<tr><td class="mono strong">${esc(a.nomor_arsip)}</td><td style="max-width:300px;overflow:hidden;text-overflow:ellipsis">${esc(a.judul)}</td><td>${formatDateTime(a.deleted_at)}</td><td class="th-actions"><div class="cell-actions">
+async function loadSampah(){ try{ const d=(await api('/api/trash'))||[]; const tb=document.getElementById('sampahBody'); if(!tb)return; if(!d.length){tb.innerHTML='<tr><td colspan="4" class="empty-state">Tempat sampah kosong</td></tr>';return;}
+  tb.innerHTML=d.map(a=>`<tr><td class="mono strong">${esc(a.nomor_arsip)}</td><td style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDateTime(a.deleted_at)}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="restoreArsip(${a.id})">${ICONS.restore} Pulihkan</button>
-    <button class="btn btn-sm btn-danger" onclick="permanentDel(${a.id})">Hapus Permanen</button>
+    ${isAdmin()?`<button class="btn btn-sm btn-danger" onclick="permanentDel(${a.id})">Hapus Permanen</button>`:''}
   </div></td></tr>`).join('');
   }catch(e){ toast(e.message,'error'); } }
-window.restoreArsip=async function(id){ try{ await api('/api/arsip/'+id+'/restore',{method:'POST',body:{}}); toast('Arsip dipulihkan','success'); loadSampah(); }catch(e){ toast(e.message,'error'); } };
+window.restoreArsip=async function(id){ try{ await api('/api/arsip/'+id+'/restore',{method:'POST',body:{}}); toast('Arsip dipulihkan','success'); state.arsipOptions=null; loadSampah(); refreshArsipIfBuilt(); refreshDashboardIfActive(); }catch(e){ toast(e.message,'error'); } };
 window.permanentDel=async function(id){ if(!confirm('Hapus PERMANEN? Tindakan tidak dapat dibatalkan.'))return; try{ await api('/api/arsip/'+id+'/permanen',{method:'DELETE'}); toast('Dihapus permanen','success'); loadSampah(); }catch(e){ toast(e.message,'error'); } };
 
 /* ============ LOG ============ */
@@ -645,20 +865,51 @@ async function loadLogPage(){ try{ const d=await api('/api/log'); const tb=docum
   }catch(e){ toast(e.message,'error'); } }
 
 /* ============ LAMPIRAN ============ */
-window.openLampiran=async function(id){ document.getElementById('lampiranArsipId').value=id; try{ const d=await api('/api/arsip/'+id); renderFileList(d.lampiran); }catch(e){ toast(e.message,'error'); } openModal('modalLampiran'); };
-function renderFileList(files){ const el=document.getElementById('fileList'); if(!files||!files.length){el.innerHTML='';return;} const can=isAdmin();
-  el.innerHTML=files.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLampModal(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join(''); }
-window.delLampModal=async function(id){ if(!confirm('Hapus lampiran?'))return; try{ await api('/api/lampiran/'+id,{method:'DELETE'}); const aid=document.getElementById('lampiranArsipId').value; const d=await api('/api/arsip/'+aid); renderFileList(d.lampiran); toast('Lampiran dihapus','success'); }catch(e){ toast(e.message,'error'); } };
+window.openLampiran=async function(id){
+  document.getElementById('lampiranArsipId').value=id;
+  try{ const d=await api('/api/arsip/'+id); renderFileList(d.lampiran||[]); openModal('modalLampiran'); }
+  catch(e){ toast(e.message,'error'); }
+};
+function renderFileList(files){ const el=document.getElementById('fileList'); if(!el) return; const can=canManage();
+  if(!files||!files.length){ el.innerHTML='<div class="empty-state">Belum ada lampiran</div>'; return; }
+  el.innerHTML=files.map(l=>`<div class="file-item"><svg class="file-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="file-item-name" title="${esc(l.nama_original)}">${esc(l.nama_original)}</span><span class="file-item-size">${formatBytes(l.ukuran)}</span><div class="file-item-actions"><a class="icon-btn" href="javascript:void(0)" onclick="downloadLamp(${l.id})" title="Unduh">${ICONS.eye}</a>${can?`<button class="icon-btn danger" onclick="delLampModal(${l.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`).join('');
+}
+window.delLampModal=async function(id){ if(!confirm('Hapus lampiran?'))return; try{
+  await api('/api/lampiran/'+id,{method:'DELETE'});
+  const aid=document.getElementById('lampiranArsipId').value;
+  const d=await api('/api/arsip/'+aid); renderFileList(d.lampiran||[]);
+  toast('Lampiran dihapus','success');
+  if(state.detailId) openDetail(state.detailId);
+}catch(e){ toast(e.message,'error'); } };
 const uploadZone=document.getElementById('uploadZone'), fileInput=document.getElementById('fileInput');
-uploadZone.addEventListener('click',()=>fileInput.click()); fileInput.addEventListener('change',()=>uploadFiles(fileInput.files));
-uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover');}); uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
-uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);});
-async function uploadFiles(files){ const aid=document.getElementById('lampiranArsipId').value; if(!aid)return;
-  let d;
-  if(STATIC_MODE){ d = await window.__mockUploadLampiran(aid, files); }
-  else { const fd=new FormData(); for(const f of files)fd.append('files',f);
-    const r=await fetch('/api/arsip/'+aid+'/lampiran',{method:'POST',body:fd}); d=await r.json(); if(!r.ok)throw new Error(d.error||'Gagal'); }
-  toast(d.files.length+' file diupload','success'); fileInput.value=''; const up=await api('/api/arsip/'+aid); renderFileList(up.lampiran); }
+if(uploadZone && fileInput){
+  uploadZone.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',()=>uploadFiles(fileInput.files));
+  uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover');});
+  uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);});
+}
+async function uploadFiles(files){
+  const aid=document.getElementById('lampiranArsipId').value;
+  if(!aid || !files || !files.length) return;
+  const zone=document.getElementById('uploadZone'); if(zone) zone.classList.add('uploading');
+  try{
+    let d;
+    if(STATIC_MODE){ d = await window.__mockUploadLampiran(aid, files); }
+    else {
+      const fd=new FormData(); for(const f of files) fd.append('files',f);
+      const r=await fetch('/api/arsip/'+aid+'/lampiran',{method:'POST',body:fd});
+      const ct=r.headers.get('content-type')||'';
+      d = ct.includes('application/json') ? await r.json() : null;
+      if(!r.ok) throw new Error((d&&d.error)||'Gagal mengunggah file');
+    }
+    toast(`${d.files.length} file diunggah`,'success');
+    state.arsipOptions=null;
+    const up=await api('/api/arsip/'+aid); renderFileList(up.lampiran||[]);
+    if(state.detailId) openDetail(state.detailId);
+  }catch(e){ toast(e.message||'Gagal mengunggah file','error'); }
+  finally{ fileInput.value=''; if(zone) zone.classList.remove('uploading'); }
+}
 
 /* ============ QR ============ */
 window.showQr=async function(id){ try{ const d=await api('/api/arsip/'+id+'/qr'); document.getElementById('qrImage').innerHTML=`<img src="${d.dataUrl}" alt="QR">`; document.getElementById('qrNomor').textContent=d.nomor_arsip; openModal('modalQr'); }catch(e){ toast(e.message,'error'); } };
@@ -666,16 +917,50 @@ document.getElementById('btnPrintQr').addEventListener('click',()=>{ const d=doc
   const w=window.open('','_blank','width=400,height=500'); w.document.write(`<html><head><title>QR ${n}</title><style>body{font-family:sans-serif;text-align:center;padding:30px}h1{font-size:18px;margin-bottom:20px}.qr{display:inline-block;border:2px solid #333;padding:10px}</style></head><body><h1>Kantor Pertanahan</h1><div class="qr">${d}</div><p style="font-weight:bold;font-size:18px">${n}</p><script>window.onload=function(){setTimeout(function(){window.print()},300)}</scr`+`ipt></body></html>`); w.document.close(); });
 
 /* ============ DISPOSISI SAVE ============ */
-document.getElementById('btnSimpanDisposisi').addEventListener('click',async()=>{ const dispId=document.getElementById('dispId').value; const arsipId=document.getElementById('dispArsipId').value;
-  const b={arsip_id:arsipId||null, kepada_user:document.getElementById('dispKepada').value, instruksi:document.getElementById('dispInstruksi').value, tanggal:document.getElementById('dispTanggal').value, status:document.getElementById('dispStatus').value, catatan:document.getElementById('dispCatatan').value};
-  try{ if(dispId){ await api('/api/disposisi/'+dispId,{method:'PUT',body:{status:b.status,catatan:b.catatan}}); toast('Disposisi diperbarui','success'); }
-    else { if(!arsipId){ toast('Pilih arsip dari halaman Data Arsip dulu','error'); return; } await api('/api/disposisi',{method:'POST',body:b}); toast('Disposisi dibuat','success'); }
-    closeModal('modalDisposisi'); loadDisposisi(); }catch(e){ toast(e.message,'error'); }
+document.getElementById('btnSimpanDisposisi').addEventListener('click',async()=>{
+  const dispId=document.getElementById('dispId').value;
+  const sel=document.getElementById('dispArsipSel');
+  const arsipId=document.getElementById('dispArsipId').value||(sel?sel.value:'');
+  const b={ kepada_user:document.getElementById('dispKepada').value||null,
+    instruksi:document.getElementById('dispInstruksi').value.trim(),
+    tanggal:document.getElementById('dispTanggal').value||todayLocal(),
+    status:document.getElementById('dispStatus').value,
+    catatan:document.getElementById('dispCatatan').value.trim() };
+  if(!dispId && !arsipId){ toast('Pilih arsip yang akan didisposisi','error'); return; }
+  const btn=document.getElementById('btnSimpanDisposisi'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
+  try{
+    if(dispId){ await api('/api/disposisi/'+dispId,{method:'PUT',body:b}); toast('Disposisi diperbarui','success'); }
+    else { await api('/api/disposisi',{method:'POST',body:{...b, arsip_id:arsipId}}); toast('Disposisi dibuat','success'); }
+    state.dispMap={};
+    closeModal('modalDisposisi');
+    if(document.getElementById('disposisiBody')) loadDisposisi();
+    if(state.detailId) openDetail(state.detailId);
+    refreshDashboardIfActive();
+  }catch(e){ toast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=old; }
 });
-document.getElementById('btnSimpanPeminjaman').addEventListener('click',async()=>{ const aid=document.getElementById('pinjamArsipId').value;
-  const b={arsip_id:aid, peminjam:document.getElementById('pinjamNama').value.trim(), unit_peminjam:document.getElementById('pinjamUnit').value, alasan:document.getElementById('pinjamAlasan').value, tanggal_pinjam:document.getElementById('pinjamTglPinjam').value, tanggal_jatuh_tempo:document.getElementById('pinjamTglTempo').value, catatan:document.getElementById('pinjamCatatan').value};
-  if(!aid||!b.peminjam){ toast('Arsip dan nama peminjam wajib','error'); return; }
-  try{ await api('/api/peminjaman',{method:'POST',body:b}); toast('Peminjaman dicatat','success'); closeModal('modalPeminjaman'); loadPeminjaman(); loadArsip(); }catch(e){ toast(e.message,'error'); }
+document.getElementById('btnSimpanPeminjaman').addEventListener('click',async()=>{
+  const sel=document.getElementById('pinjamArsipSel');
+  const aid=document.getElementById('pinjamArsipId').value||(sel?sel.value:'');
+  const b={ arsip_id:aid, peminjam:document.getElementById('pinjamNama').value.trim(),
+    unit_peminjam:document.getElementById('pinjamUnit').value||null,
+    alasan:document.getElementById('pinjamAlasan').value.trim(),
+    tanggal_pinjam:document.getElementById('pinjamTglPinjam').value,
+    tanggal_jatuh_tempo:document.getElementById('pinjamTglTempo').value,
+    catatan:document.getElementById('pinjamCatatan').value.trim() };
+  if(!aid||!b.peminjam){ toast('Arsip dan nama peminjam wajib dipilih/diisi','error'); return; }
+  if(!b.tanggal_pinjam||!b.tanggal_jatuh_tempo){ toast('Tanggal pinjam dan jatuh tempo wajib diisi','error'); return; }
+  if(b.tanggal_jatuh_tempo < b.tanggal_pinjam){ toast('Jatuh tempo tidak boleh sebelum tanggal pinjam','error'); return; }
+  const btn=document.getElementById('btnSimpanPeminjaman'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
+  try{
+    await api('/api/peminjaman',{method:'POST',body:b});
+    toast('Peminjaman dicatat','success');
+    state.arsipOptions=null;
+    closeModal('modalPeminjaman');
+    loadPeminjaman(); refreshArsipIfBuilt(); refreshDashboardIfActive();
+    if(state.detailId) openDetail(state.detailId);
+  }catch(e){ toast(e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=old; }
 });
 
 /* ============ USER DROPDOWN helpers (re-index users body) ============ */
@@ -688,10 +973,10 @@ function applySettings(s){
   if(t2&&s.sub_nama) t2.textContent=s.sub_nama;
   const lbh=document.querySelector('.login-brand-panel h1'); if(lbh&&s.nama_kantor) lbh.textContent=s.nama_kantor;
   const lbs=document.querySelector('.brand-sub'); if(lbs&&s.sub_nama) lbs.textContent=s.sub_nama;
-  const fb=document.getElementById('footBrand'); if(fb&&s.sub_nama) fb.textContent='Kantor Pertanahan — '+(s.sub_nama||s.nama_kantor||'Badan Pertanahan Nasional');
+  const fb=document.getElementById('footBrand'); if(fb) fb.textContent=(s.nama_kantor||'Kantor Pertanahan')+' — '+(s.sub_nama||'Badan Pertanahan Nasional');
 }
 function kopsHTML(s){
-  const addr=[s.alamat||'', s.telepon?('Telepon: '+s.telepon):'', s.email?('Email: '+s.email):''].filter(Boolean).join('<br>');
+  const addr=[s.alamat||'', s.telepon?('Telepon: '+s.telepon):'', s.email?('Email: '+s.email):''].filter(Boolean).map(esc).join('<br>');
   return `<h4>${esc(s.nama_kantor||'Kantor Pertanahan')}</h4><div class="kp-sub">${esc(s.sub_nama||'Badan Pertanahan Nasional')}</div><div class="kp-addr">${addr}</div><div class="kp-motto">${esc(s.motto||'')}</div><div class="kp-kepala">${esc(s.kepala_nama||'')}${s.kepala_nip?'<br>NIP. '+esc(s.kepala_nip):''}</div>`;
 }
 async function loadProfilPage(){
@@ -713,7 +998,7 @@ function openProfilEdit(){
   set('setNamaKantor','nama_kantor'); set('setSubNama','sub_nama'); set('setAlamat','alamat'); set('setTelepon','telepon');
   set('setEmail','email'); set('setWebsite','website'); set('setKepalaNama','kepala_nama'); set('setKepalaNip','kepala_nip'); set('setKota','kota_kop'); set('setMotto','motto');
   const pv=()=>{ const now={nama_kantor:document.getElementById('setNamaKantor').value,sub_nama:document.getElementById('setSubNama').value,alamat:document.getElementById('setAlamat').value,telepon:document.getElementById('setTelepon').value,email:document.getElementById('setEmail').value,kepala_nama:document.getElementById('setKepalaNama').value,kepala_nip:document.getElementById('setKepalaNip').value,motto:document.getElementById('setMotto').value}; document.getElementById('profilKopPreview').innerHTML=kopsHTML(now); };
-  document.querySelectorAll('#modalProfil input.ctl').forEach(inp=>inp.addEventListener('input',pv));
+  document.querySelectorAll('#modalProfil input.ctl').forEach(inp=>{ inp.oninput=pv; });
   pv();
   openModal('modalProfil');
 }
@@ -724,22 +1009,44 @@ document.getElementById('btnSimpanProfil').addEventListener('click',async()=>{ c
 });
 
 /* ============ IMPORT CSV ============ */
-function openImportModal(){ document.getElementById('importResult').innerHTML=''; document.getElementById('csvFileName').textContent=''; document.getElementById('csvInput').value=''; openModal('modalImport'); }
+let importFile = null;
+function openImportModal(){
+  if(!canManage()){ toast('Hanya admin/staf yang dapat mengimpor data','error'); return; }
+  importFile=null;
+  document.getElementById('importResult').innerHTML='';
+  document.getElementById('csvFileName').textContent='';
+  document.getElementById('csvInput').value='';
+  openModal('modalImport');
+}
+function setImportFile(f){ importFile=f||null; document.getElementById('csvFileName').textContent=f?('Tersedia: '+f.name+' ('+formatBytes(f.size)+')'):''; }
 document.getElementById('btnPilihCsv').addEventListener('click',e=>{ e.stopPropagation(); document.getElementById('csvInput').click(); });
-document.getElementById('importZone').addEventListener('click',e=>{ if(e.target.id!=='btnPilihCsv') document.getElementById('csvInput').click(); });
-document.getElementById('csvInput').addEventListener('change',()=>{ const f=document.getElementById('csvInput').files[0]; document.getElementById('csvFileName').textContent=f?('Tersedia: '+f.name+' ('+formatBytes(f.size)+')'):''; });
-document.getElementById('btnImportSubmit').addEventListener('click',async()=>{ const inp=document.getElementById('csvInput'); if(!inp.files.length){ toast('Pilih file CSV dulu','error'); return; }
+const importZone=document.getElementById('importZone');
+importZone.addEventListener('click',e=>{ if(e.target.id!=='btnPilihCsv') document.getElementById('csvInput').click(); });
+importZone.addEventListener('dragover',e=>{ e.preventDefault(); importZone.classList.add('dragover'); });
+importZone.addEventListener('dragleave',()=>importZone.classList.remove('dragover'));
+importZone.addEventListener('drop',e=>{ e.preventDefault(); importZone.classList.remove('dragover'); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) setImportFile(f); });
+document.getElementById('csvInput').addEventListener('change',()=>{ const f=document.getElementById('csvInput').files[0]; setImportFile(f); });
+document.getElementById('btnImportSubmit').addEventListener('click',async()=>{
+  const inp=document.getElementById('csvInput');
+  const file=importFile||inp.files[0];
+  if(!file){ toast('Pilih file CSV dulu','error'); return; }
   const btn=document.getElementById('btnImportSubmit'); const old=btn.textContent; btn.textContent='Memproses...'; btn.disabled=true;
   try{
     let d;
-    if(STATIC_MODE){ try{ d = await window.__mockImport(inp.files[0]); }catch(e){ toast(e.message||'Import gagal','error'); return; } }
-    else { const fd=new FormData(); fd.append('file',inp.files[0]);
-      const res=await fetch('/api/import/arsip',{method:'POST',body:fd}); d=await res.json();
-      if(!res.ok){ toast(d.error||'Import gagal','error'); return; } }
-    document.getElementById('importResult').innerHTML=`<div class="imp-sum"><div><strong class="ok">${d.masuk}</strong><span>Berhasil</span></div><div><strong class="bad">${d.gagal}</strong><span>Gagal</span></div><div><strong>${(d.masuk||0)+(d.gagal||0)}</strong><span>Total</span></div></div>`+(d.eror&&d.eror.length?`<div class="imp-errors">${d.eror.map(er=>`<div class="imp-err">${esc(er)}</div>`).join('')}</div>`:'');
-    toast(d.masuk>0?('Import selesai: '+d.masuk+' berhasil'):'Tidak ada data berhasil diimpor', d.masuk>0?'success':'info');
-    loadArsip();
-  }catch(e){ toast(e.message,'error'); }
+    if(STATIC_MODE){ d = await window.__mockImport(file); }
+    else {
+      const fd=new FormData(); fd.append('file',file);
+      const res=await fetch('/api/import/arsip',{method:'POST',body:fd});
+      const ct=res.headers.get('content-type')||'';
+      d=ct.includes('application/json')?await res.json():null;
+      if(!res.ok) throw new Error((d&&d.error)||'Import gagal');
+    }
+    const masuk=d.masuk||0, gagal=d.gagal||0;
+    document.getElementById('importResult').innerHTML=`<div class="imp-sum"><div><strong class="ok">${masuk}</strong><span>Berhasil</span></div><div><strong class="bad">${gagal}</strong><span>Gagal</span></div><div><strong>${masuk+gagal}</strong><span>Total</span></div></div>`+(d.eror&&d.eror.length?`<div class="imp-errors">${d.eror.map(er=>`<div class="imp-err">${esc(er)}</div>`).join('')}</div>`:'');
+    toast(masuk>0?('Import selesai: '+masuk+' berhasil'):'Tidak ada data berhasil diimpor', masuk>0?'success':'info');
+    state.arsipOptions=null;
+    refreshArsipIfBuilt(); refreshDashboardIfActive();
+  }catch(e){ toast(e.message||'Import gagal','error'); }
   finally{ btn.textContent=old; btn.disabled=false; }
 });
 
@@ -752,29 +1059,61 @@ function buildBukuAgendaLayout(){ const sec=document.getElementById('page-buku-a
     </div></div>
     <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>No. Urut</th><th>Tanggal</th><th>Nomor Surat</th><th>Asal / Tujuan</th><th>Perihal</th><th>Arsip</th><th class="th-actions">Aksi</th></tr></thead><tbody id="bgBody"><tr><td colspan="7" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`;
   sec.querySelectorAll('#bgTabs .tab').forEach(t=>t.addEventListener('click',()=>{ sec.querySelectorAll('#bgTabs .tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); state.bgJenis=t.dataset.j; loadBukuAgenda(); }));
-  const now=new Date().getFullYear(); let opts=''; for(let y=now;y>=now-5;y--) opts+=`<option value="${y}">${y}</option>`;
-  document.getElementById('bgTahunFilter').innerHTML='<option value="">Semua Tahun</option>'+opts;
-  document.getElementById('bgTahunFilter').value=String(now);
-  document.getElementById('bgTahunFilter').addEventListener('change',()=>{ state.bgPage=1; loadBukuAgenda(); });
+  const now=new Date().getFullYear();
+  document.getElementById('bgTahunFilter').innerHTML=`<option value="${now}">${now}</option>`;
+  document.getElementById('bgTahunFilter').addEventListener('change',()=>{ loadBukuAgenda(); });
+}
+function updateBgTahunFilter(years, selected){
+  const sel=document.getElementById('bgTahunFilter'); if(!sel) return;
+  const now=new Date().getFullYear();
+  const all=[...new Set([now, ...(years||[]).map(Number), Number(selected)||0])].filter(y=>y>0).sort((a,b)=>b-a);
+  sel.innerHTML=all.map(y=>`<option value="${y}">${y}</option>`).join('');
+  sel.value=String(selected||now);
 }
 async function loadBukuAgenda(){
-  const jenis=state.bgJenis||'masuk'; const tahun=document.getElementById('bgTahunFilter')?document.getElementById('bgTahunFilter').value:'';
-  const qs='/api/buku-agenda?jenis='+jenis+(tahun?'&tahun='+tahun:'');
+  const jenis=state.bgJenis||'masuk';
+  const selTahun=document.getElementById('bgTahunFilter');
+  const tahun=(selTahun&&selTahun.value)?selTahun.value:String(new Date().getFullYear());
+  const qs='/api/buku-agenda?jenis='+encodeURIComponent(jenis)+'&tahun='+encodeURIComponent(tahun);
   try{
     const d=await api(qs); const tb=document.getElementById('bgBody'); if(!tb)return;
-    state.bgMap={}; d.rows.forEach(r=>state.bgMap[r.id]=r);
-    const info=document.getElementById('bgInfo'); if(info) info.textContent=d.tahun===tahun?`${d.jumlahTahunIni} catatan tahun ${d.tahun}`:'';
-    if(!d.rows.length){ tb.innerHTML='<tr><td colspan="7" class="empty-state">Belum ada catatan agenda</td></tr>'; return; }
-    tb.innerHTML=d.rows.map(x=>`<tr><td><span class="agenda-no ${jenis==='keluar'?'out':''}">${x.nomor_urut}/${x.tahun}</span></td><td>${formatDate(x.tanggal)}</td><td class="mono">${esc(x.nomor_surat||'-')}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.asal_tujuan||'')}">${esc(x.asal_tujuan||'-')}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.perihal||'')}">${esc(x.perihal||'-')}</td><td>${x.nomor_arsip?`<span class="mono" style="color:var(--green-700)">${esc(x.nomor_arsip)}</span>`:'-'}</td>
-      <td class="th-actions"><div class="cell-actions">${isAdminUser()?`<button class="icon-btn" onclick="editBukuAgenda(${x.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delBukuAgenda(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></td></tr>`).join('');
+    updateBgTahunFilter(d.tahunTersedia, tahun);
+    const rows=d.rows||[];
+    state.bgMap={}; rows.forEach(r=>state.bgMap[r.id]=r);
+    const info=document.getElementById('bgInfo'); if(info) info.textContent=(Number(d.tahun)===Number(tahun))?`${d.jumlahTahunIni} catatan tahun ${d.tahun}`:'';
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="7" class="empty-state">Belum ada catatan agenda</td></tr>'; return; }
+    tb.innerHTML=rows.map(x=>`<tr><td><span class="agenda-no ${jenis==='keluar'?'out':''}">${x.nomor_urut}/${x.tahun}</span></td><td>${formatDate(x.tanggal)}</td><td class="mono">${esc(x.nomor_surat||'-')}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.asal_tujuan||'')}">${esc(x.asal_tujuan||'-')}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.perihal||'')}">${esc(x.perihal||'-')}</td><td>${x.nomor_arsip?`<span class="mono" style="color:var(--green-700)">${esc(x.nomor_arsip)}</span>`:'-'}</td>
+      <td class="th-actions"><div class="cell-actions">${canManage()?`<button class="icon-btn" onclick="editBukuAgenda(${x.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delBukuAgenda(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></td></tr>`).join('');
   }catch(e){ toast(e.message,'error'); }
 }
-function fillBgTahun(){ const sel=document.getElementById('bgTahun'); if(!sel)return; const now=new Date().getFullYear(); let opts=''; for(let y=now+1;y>=2018;y--) opts+=`<option value="${y}">${y}</option>`; if(sel.innerHTML!==opts){ sel.innerHTML=opts; } if(!sel.value) sel.value=String(now); }
-async function fillBgArsip(){ const sel=document.getElementById('bgArsip'); if(!sel)return; try{ const d=await api('/api/arsip?limit=500'); sel.innerHTML='<option value="">— tanpa arsip —</option>'+d.data.map(a=>`<option value="${a.id}">${esc(a.nomor_arsip+''+' — '+a.judul)}</option>`).join(''); }catch(e){} }
+function fillBgTahun(selected){
+  const sel=document.getElementById('bgTahun'); if(!sel)return;
+  const now=new Date().getFullYear();
+  const atas=Math.max(now+1, Number(selected)||0);
+  let opts=''; for(let y=atas;y>=2018;y--) opts+=`<option value="${y}">${y}</option>`;
+  sel.innerHTML=opts;
+  sel.value=String(Number(selected)||now);
+}
+async function fillBgArsip(){ const sel=document.getElementById('bgArsip'); if(!sel)return; try{ const list=await loadArsipOptions(); sel.innerHTML='<option value="">— tanpa arsip —</option>'+list.map(a=>`<option value="${a.id}">${esc(a.nomor_arsip+' — '+a.judul)}</option>`).join(''); }catch(e){} }
 async function openBukuAgendaModal(x){
-  fillBgTahun(); await fillBgArsip();
-  if(x){ document.getElementById('bgId').value=x.id; document.getElementById('bgJenis').value=x.jenis||'masuk'; document.getElementById('bgTahun').value=x.tahun; document.getElementById('bgTanggal').value=x.tanggal||''; document.getElementById('bgNomor').value=x.nomor_surat||''; document.getElementById('bgAsalTujuan').value=x.asal_tujuan||''; document.getElementById('bgPerihal').value=x.perihal||''; document.getElementById('bgKet').value=x.keterangan||''; document.getElementById('bgArsip').value=x.arsip_id||''; document.getElementById('agendaModalTitle').textContent='Edit Agenda'; }
-  else { document.getElementById('bgId').value=''; document.getElementById('bgJenis').value=state.bgJenis||'masuk'; document.getElementById('bgTanggal').value=new Date().toISOString().split('T')[0]; document.getElementById('bgNomor').value=''; document.getElementById('bgAsalTujuan').value=''; document.getElementById('bgPerihal').value=''; document.getElementById('bgKet').value=''; document.getElementById('bgArsip').value=''; document.getElementById('agendaModalTitle').textContent='Catat Agenda'; }
+  const filterTahun=(()=>{ const s=document.getElementById('bgTahunFilter'); return s&&s.value?Number(s.value):null; })();
+  fillBgTahun(x?Number(x.tahun):filterTahun); await fillBgArsip();
+  const jenisEl=document.getElementById('bgJenis'), tahunEl=document.getElementById('bgTahun');
+  jenisEl.disabled=!!x; tahunEl.disabled=!!x;
+  if(x){
+    document.getElementById('bgId').value=x.id; jenisEl.value=x.jenis||'masuk'; tahunEl.value=String(x.tahun);
+    document.getElementById('bgTanggal').value=x.tanggal||''; document.getElementById('bgNomor').value=x.nomor_surat||'';
+    document.getElementById('bgAsalTujuan').value=x.asal_tujuan||''; document.getElementById('bgPerihal').value=x.perihal||'';
+    document.getElementById('bgKet').value=x.keterangan||''; document.getElementById('bgArsip').value=x.arsip_id||'';
+    document.getElementById('agendaModalTitle').textContent='Edit Agenda';
+  }
+  else {
+    document.getElementById('bgId').value=''; jenisEl.value=state.bgJenis||'masuk';
+    document.getElementById('bgTanggal').value=todayLocal(); document.getElementById('bgNomor').value='';
+    document.getElementById('bgAsalTujuan').value=''; document.getElementById('bgPerihal').value='';
+    document.getElementById('bgKet').value=''; document.getElementById('bgArsip').value='';
+    document.getElementById('agendaModalTitle').textContent='Catat Agenda';
+  }
   openModal('modalBukuAgenda');
 }
 window.editBukuAgenda=function(id){ const x=state.bgMap[id]; if(x) openBukuAgendaModal(x); };
@@ -803,8 +1142,8 @@ function buildKalenderLayout(){ const sec=document.getElementById('page-kalender
       <div class="panel" style="border:1px solid var(--line)"><div class="panel-head"><div><h3 class="panel-title">Tambah Cepat</h3><p class="panel-sub">Catat jadwal pada tanggal terpilih</p></div></div><div class="panel-body"><div id="kalQuick"></div></div></div>
     </div></div>`;
   const d=new Date(); state.kalYear=d.getFullYear(); state.kalMonth=d.getMonth(); state.selectedDay=null;
-  document.getElementById('kalPrev').addEventListener('click',()=>{ state.kalMonth--; if(state.kalMonth<0){ state.kalMonth=11; state.kalYear--; } loadKalenderPage(); });
-  document.getElementById('kalNext').addEventListener('click',()=>{ state.kalMonth++; if(state.kalMonth>11){ state.kalMonth=0; state.kalYear++; } loadKalenderPage(); });
+  document.getElementById('kalPrev').addEventListener('click',()=>{ state.kalMonth--; if(state.kalMonth<0){ state.kalMonth=11; state.kalYear--; } state.selectedDay=null; loadKalenderPage(); });
+  document.getElementById('kalNext').addEventListener('click',()=>{ state.kalMonth++; if(state.kalMonth>11){ state.kalMonth=0; state.kalYear++; } state.selectedDay=null; loadKalenderPage(); });
   document.getElementById('kalToday').addEventListener('click',()=>{ const x=new Date(); state.kalYear=x.getFullYear(); state.kalMonth=x.getMonth(); state.selectedDay=null; loadKalenderPage(); });
 }
 async function loadKalenderPage(){
@@ -813,6 +1152,7 @@ async function loadKalenderPage(){
   document.getElementById('kalTitle').textContent=BULAN_ID[state.kalMonth]+' '+state.kalYear;
   try{
     const d=await api('/api/agenda?bulan='+periode); const rows=d.rows||[];
+    state.kegMap={}; rows.forEach(r=>state.kegMap[r.id]=r); state.kegMapLoaded=true;
     renderKalGrid(rows, periode);
     renderKalList(rows);
     renderKalQuick();
@@ -842,10 +1182,12 @@ function renderKalList(rows){ const el=document.getElementById('kalList'); if(!e
   if(!rows.length){ el.innerHTML='<div class="empty-row">Tidak ada agenda pada periode ini</div>'; return; }
   const sorted=[...rows].sort((a,b)=>a.tanggal<b.tanggal?-1:1);
   el.innerHTML=sorted.slice(0,40).map(x=>{ const c={rapat:'#176a54',kegiatan:'#2aa07e',verifikasi:'#3a6eb5',pelayanan:'#c9a24b',sosialisasi:'#8e44ad',lainnya:'#7f8c8d'}[x.tipe]||'#7f8c8d';
-    return `<div class="kg-item"><span class="kg-accent" style="background:${c}"></span><div class="kg-item-body"><strong>${esc(x.judul)}</strong><span>${formatDate(x.tanggal)}${x.jam_mulai?' · '+x.jam_mulai.slice(0,5):''}${x.jam_selesai?'–'+x.jam_selesai.slice(0,5):''}${x.lokasi?' · '+esc(x.lokasi):''}</span></div><div class="kg-item-actions">${isAdminUser()?`<button class="icon-btn" onclick="openKegiatanModalById(${x.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delKegiatan(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`; }).join('');
+    return `<div class="kg-item"><span class="kg-accent" style="background:${c}"></span><div class="kg-item-body"><strong>${esc(x.judul)}</strong><span>${formatDate(x.tanggal)}${x.jam_mulai?' · '+x.jam_mulai.slice(0,5):''}${x.jam_selesai?'–'+x.jam_selesai.slice(0,5):''}${x.lokasi?' · '+esc(x.lokasi):''}</span></div><div class="kg-item-actions">${canManage()?`<button class="icon-btn" onclick="openKegiatanModalById(${x.id})" title="Edit">${ICONS.edit}</button><button class="icon-btn danger" onclick="delKegiatan(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}</div></div>`; }).join('');
 }
-async function populateKegMap(){ if(!state.kegMapLoaded){ const d=await api('/api/agenda'); state.kegMap={}; (d.rows||[]).forEach(r=>state.kegMap[r.id]=r); state.kegMapLoaded=true; } }
-window.openKegiatanModalById=async function(id){ await populateKegMap(); openKegiatanModal(state.kegMap[id]); };
+async function populateKegMap(){ if(!state.kegMapLoaded){ const d=await api('/api/agenda?bulan='+state.kalYear+'-'+String(state.kalMonth+1).padStart(2,'0')); state.kegMap={}; (d.rows||[]).forEach(r=>state.kegMap[r.id]=r); state.kegMapLoaded=true; } }
+window.openKegiatanModalById=async function(id){ try{ await populateKegMap(); }catch(e){ toast(e.message,'error'); return; }
+  const x=state.kegMap[id]; if(!x){ toast('Kegiatan tidak ditemukan, memuat ulang kalender','info'); state.kegMapLoaded=false; loadKalenderPage(); return; }
+  openKegiatanModal(x); };
 function openKegiatanModal(x){
   if(x){ document.getElementById('kgId').value=x.id; document.getElementById('kgJudul').value=x.judul; document.getElementById('kgTanggal').value=x.tanggal; document.getElementById('kgTipe').value=x.tipe||'kegiatan'; document.getElementById('kgJamMulai').value=x.jam_mulai||''; document.getElementById('kgJamSelesai').value=x.jam_selesai||''; document.getElementById('kgLokasi').value=x.lokasi||''; document.getElementById('kgKet').value=x.keterangan||''; document.getElementById('kegiatanModalTitle').textContent='Edit Kegiatan'; }
   else { document.getElementById('kgId').value=''; document.getElementById('kgJudul').value=''; document.getElementById('kgTanggal').value=toYMD(new Date()); document.getElementById('kgTipe').value='rapat'; document.getElementById('kgJamMulai').value=''; document.getElementById('kgJamSelesai').value=''; document.getElementById('kgLokasi').value=''; document.getElementById('kgKet').value=''; document.getElementById('kegiatanModalTitle').textContent='Tambah Kegiatan'; }

@@ -44,20 +44,18 @@ Berjalan 100% lokal di komputer Anda, **tanpa biaya** dan tanpa internet (data t
 npm install
 ```
 
-### 2. Inisialisasi database (sekali saja):
-```bash
-npm run init-db
-```
-
-### 3. (Opsional) Tambah data contoh:
+### 2. (Opsional) Tambah data contoh:
 ```bash
 npm run seed
 ```
 
-### 4. Jalankan server:
+### 3. Jalankan server:
 ```bash
 npm start
 ```
+
+> Database dan data awal (kategori, unit, instansi, lokasi, akun default) dibuat
+> otomatis saat server pertama kali dijalankan — tidak perlu `npm run init-db`.
 
 Lalu buka browser ke: **http://localhost:3000**
 
@@ -104,6 +102,9 @@ saat dijalankan di luar `localhost`.
 - Mode ini terdeteksi otomatis: selama diakses dari `localhost`/`127.0.0.1`
   aplikasi memakai server Express asli; di tempat lain (mis. GitHub Pages)
   aplikasi memakai backend tiruan.
+- Mode statis diuji langsung pada subpath GitHub Pages (`/<nama-repo>/`):
+  login, CRUD arsip, detail + QR, disposisi, peminjaman, buku agenda,
+  pengguna, dan ekspor CSV berjalan tanpa server.
 
 ## Akun Default
 

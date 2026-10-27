@@ -19,12 +19,13 @@
 
   /* ===================== UTIL ===================== */
   function pad(n) { return String(n).padStart(2, '0'); }
-  function nowIso() {
-    var d = new Date();
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
-      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-  function today() { return nowIso().slice(0, 10); }
+  // Samakan dengan SQLite CURRENT_TIMESTAMP (UTC, tanpa penanda zona).
+  function nowIso() { return new Date().toISOString().slice(0, 19).replace('T', ' '); }
+  // Tanggal kalender lokal (sama dengan todayLocal() di server).
+  function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function validDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+  function byDateAsc(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
+  function byDateDesc(a, b) { return a > b ? -1 : (a < b ? 1 : 0); }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function nextId(arr) { return arr.reduce(function (m, x) { return Math.max(m, x.id || 0); }, 0) + 1; }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -112,7 +113,13 @@
   async function seed() {
     if (DB) return DB;
     var existing = load();
-    if (existing && existing.users && existing.users.length) { DB = existing; return DB; }
+    if (existing && existing.users && existing.users.length) {
+      ['kategori', 'unit', 'instansi', 'lokasi', 'arsip', 'lampiran', 'disposisi', 'peminjaman', 'log', 'notifikasi', 'bukuAgenda', 'agenda'].forEach(function (k) {
+        if (!Array.isArray(existing[k])) existing[k] = [];
+      });
+      if (!existing.settings) existing.settings = clone(SETTINGS);
+      DB = existing; return DB;
+    }
 
     var hash = await hashPassword('password123');
     DB = {
@@ -175,12 +182,14 @@
   function joinPeminjaman(p) {
     var a = byId(DB.arsip, p.arsip_id) || {};
     var k = byId(DB.kategori, a.kategori_id) || {};
+    var ub = byId(DB.unit, p.unit_peminjam);
     var o = clone(p);
     o.nomor_arsip = a.nomor_arsip || '';
     o.judul = a.judul || '';
     o.tanggal_arsip = a.tanggal_arsip || '';
     o.kategori_nama = k.nama || '';
     o.kategori_kode = k.kode || '';
+    o.unit_nama = (ub && ub.nama) || p.unit_peminjam || '';
     return o;
   }
 
@@ -282,19 +291,33 @@
       requireAuth();
       var uid1 = currentUser().id;
       if (body.all) DB.notifikasi.forEach(function (n) { if (n.user_id === uid1) n.is_read = 1; });
-      else if (body.id) { var n1 = byId(DB.notifikasi, body.id); if (n1) n1.is_read = 1; }
+      else if (body.id) { var n1 = byId(DB.notifikasi, body.id); if (n1 && n1.user_id === uid1) n1.is_read = 1; }
       save();
       return { ok: true };
     }
 
     // ---- USERS ----
-    if (path === '/api/users' && method === 'GET') { requireRole('admin'); return DB.users.slice().sort(function (a, b) { return b.created_at < a.created_at ? -1 : 1; }); }
+    if (path === '/api/users' && method === 'GET') {
+      requireRole('admin');
+      return DB.users.slice().sort(function (a, b) { return byDateDesc(a.created_at, b.created_at); }).map(function (x) {
+        var o = clone(x); delete o.password_hash; return o;
+      });
+    }
+    if (path === '/api/users/ringkas' && method === 'GET') {
+      requireAuth();
+      return DB.users.filter(function (x) { return x.aktif; })
+        .sort(function (a, b) { return a.nama < b.nama ? -1 : (a.nama > b.nama ? 1 : 0); })
+        .map(function (x) { return { id: x.id, nama: x.nama, role: x.role, aktif: x.aktif }; });
+    }
     if (path === '/api/users' && method === 'POST') {
       requireRole('admin');
       var un = String(body.username || '').trim();
-      if (!un || !body.nama || !body.password || String(body.password).length < 6) throw new Error('Data tidak lengkap / password min 6');
+      var nm = String(body.nama || '').trim();
+      var rl = body.role || 'staff';
+      if (!un || !nm || !body.password || String(body.password).length < 6) throw new Error('Data tidak lengkap / password minimal 6 karakter');
+      if (['admin', 'staff', 'kepala'].indexOf(rl) === -1) throw new Error('Role tidak valid');
       if (DB.users.some(function (x) { return x.username === un; })) throw new Error('Username sudah dipakai');
-      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: body.nama, role: body.role || 'staff', aktif: 1, last_login: null, created_at: nowIso() };
+      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
       DB.users.push(nu);
       logAktivitas(currentUser().id, 'USER_CREATE', 'users', nu.id, 'User: ' + un);
       save();
@@ -303,16 +326,28 @@
     var mUser = path.match(/^\/api\/users\/(\d+)$/);
     if (mUser && method === 'PUT') {
       requireRole('admin');
-      var eu = byId(DB.users, mUser[1]); if (!eu) throw new Error('Tidak ditemukan');
-      eu.nama = body.nama; eu.role = body.role; eu.aktif = body.aktif ? 1 : 0;
-      logAktivitas(currentUser().id, 'USER_UPDATE', 'users', eu.id, 'User id ' + eu.id);
+      var eu = byId(DB.users, mUser[1]); if (!eu) throw new Error('Pengguna tidak ditemukan');
+      var enama = String(body.nama || '').trim();
+      if (!enama) throw new Error('Nama tidak boleh kosong');
+      if (['admin', 'staff', 'kepala'].indexOf(body.role) === -1) throw new Error('Role tidak valid');
+      var jadiAktif = body.aktif ? 1 : 0;
+      var meId = currentUser().id;
+      if (String(eu.id) === String(meId) && (!jadiAktif || body.role !== 'admin')) {
+        throw new Error('Anda tidak dapat menonaktifkan atau menurunkan role akun sendiri');
+      }
+      var adminAktif = DB.users.filter(function (x) { return x.role === 'admin' && x.aktif; }).length;
+      if (eu.role === 'admin' && eu.aktif && (!jadiAktif || body.role !== 'admin') && adminAktif <= 1) {
+        throw new Error('Harus tersisa minimal satu admin aktif');
+      }
+      eu.nama = enama; eu.role = body.role; eu.aktif = jadiAktif;
+      logAktivitas(meId, 'USER_UPDATE', 'users', eu.id, 'User id ' + eu.id);
       save(); return { ok: true };
     }
     var mReset = path.match(/^\/api\/users\/(\d+)\/reset-password$/);
     if (mReset && method === 'POST') {
       requireRole('admin');
       if (!body.password || String(body.password).length < 6) throw new Error('Password minimal 6 karakter');
-      var ru = byId(DB.users, mReset[1]); if (!ru) throw new Error('Tidak ditemukan');
+      var ru = byId(DB.users, mReset[1]); if (!ru) throw new Error('Pengguna tidak ditemukan');
       ru.password_hash = await hashPassword(String(body.password));
       logAktivitas(currentUser().id, 'USER_RESET', 'users', ru.id, 'Reset password');
       save(); return { ok: true };
@@ -322,51 +357,75 @@
     var mKat = path.match(/^\/api\/kategori\/(\d+)$/);
     if (path === '/api/kategori' && method === 'GET') { requireAuth(); return DB.kategori.slice().sort(function (a, b) { return a.kode < b.kode ? -1 : 1; }); }
     if (path === '/api/kategori' && method === 'POST') {
-      requireAuth();
-      var kd = String(body.kode || '').toUpperCase();
+      requireRole('admin');
+      var kd = String(body.kode || '').toUpperCase().trim();
+      var knama = String(body.nama || '').trim();
+      if (!kd || !knama) throw new Error('Kode dan nama kategori wajib diisi');
       if (DB.kategori.some(function (x) { return x.kode === kd; })) throw new Error('Kode kategori sudah ada');
-      var nk = { id: nextId(DB.kategori), kode: kd, nama: body.nama, deskripsi: body.deskripsi || null, created_at: nowIso() };
+      var nk = { id: nextId(DB.kategori), kode: kd, nama: knama, deskripsi: body.deskripsi || null, created_at: nowIso() };
       DB.kategori.push(nk);
-      logAktivitas(currentUser().id, 'CREATE', 'kategori_arsip', nk.id, 'Kategori: ' + body.nama);
+      logAktivitas(currentUser().id, 'CREATE', 'kategori_arsip', nk.id, 'Kategori: ' + knama);
       save(); return { id: nk.id };
     }
-    if (mKat && method === 'PUT') { requireRole('admin'); var ek = byId(DB.kategori, mKat[1]); if (ek) { ek.nama = body.nama; ek.deskripsi = body.deskripsi; } save(); return { ok: true }; }
-    if (mKat && method === 'DELETE') { requireRole('admin'); DB.kategori = DB.kategori.filter(function (x) { return x.id !== +mKat[1]; }); save(); return { ok: true }; }
+    if (mKat && method === 'PUT') { requireRole('admin'); var ek = byId(DB.kategori, mKat[1]); if (!ek) throw new Error('Tidak ditemukan'); ek.nama = body.nama; ek.deskripsi = body.deskripsi; save(); return { ok: true }; }
+    if (mKat && method === 'DELETE') {
+      requireRole('admin');
+      if (DB.arsip.some(function (a) { return String(a.kategori_id) === mKat[1]; })) throw new Error('Kategori masih dipakai oleh arsip, pindahkan arsip terlebih dahulu');
+      DB.kategori = DB.kategori.filter(function (x) { return x.id !== +mKat[1]; }); save(); return { ok: true };
+    }
 
     var mLok = path.match(/^\/api\/lokasi\/(\d+)$/);
     if (path === '/api/lokasi' && method === 'GET') { requireAuth(); return DB.lokasi.slice().sort(function (a, b) { return a.kode < b.kode ? -1 : 1; }); }
     if (path === '/api/lokasi' && method === 'POST') {
-      requireAuth();
-      var lk = String(body.kode || '').toUpperCase();
+      requireRole('admin', 'staff');
+      var lk = String(body.kode || '').toUpperCase().trim();
+      var lnama = String(body.nama || '').trim();
+      if (!lk || !lnama) throw new Error('Kode dan nama lokasi wajib diisi');
       if (DB.lokasi.some(function (x) { return x.kode === lk; })) throw new Error('Kode lokasi sudah ada');
-      var nl = { id: nextId(DB.lokasi), kode: lk, nama: body.nama, keterangan: body.keterangan || null, aktif: 1, created_at: nowIso() };
+      var nl = { id: nextId(DB.lokasi), kode: lk, nama: lnama, keterangan: body.keterangan || null, aktif: 1, created_at: nowIso() };
       DB.lokasi.push(nl); save(); return { id: nl.id };
     }
-    if (mLok && method === 'PUT') { requireRole('admin'); var el = byId(DB.lokasi, mLok[1]); if (el) { el.kode = body.kode; el.nama = body.nama; el.keterangan = body.keterangan; el.aktif = body.aktif ? 1 : 0; } save(); return { ok: true }; }
-    if (mLok && method === 'DELETE') { requireRole('admin'); DB.lokasi = DB.lokasi.filter(function (x) { return x.id !== +mLok[1]; }); save(); return { ok: true }; }
+    if (mLok && method === 'PUT') { requireRole('admin', 'staff'); var el = byId(DB.lokasi, mLok[1]); if (!el) throw new Error('Tidak ditemukan'); el.kode = body.kode; el.nama = body.nama; el.keterangan = body.keterangan; el.aktif = body.aktif ? 1 : 0; save(); return { ok: true }; }
+    if (mLok && method === 'DELETE') {
+      requireRole('admin', 'staff');
+      if (DB.arsip.some(function (a) { return String(a.lokasi_id) === mLok[1]; })) throw new Error('Lokasi masih dipakai oleh arsip');
+      DB.lokasi = DB.lokasi.filter(function (x) { return x.id !== +mLok[1]; }); save(); return { ok: true };
+    }
 
     var mUni = path.match(/^\/api\/unit\/(\d+)$/);
     if (path === '/api/unit' && method === 'GET') { requireAuth(); return DB.unit.slice().sort(function (a, b) { return a.kode < b.kode ? -1 : 1; }); }
     if (path === '/api/unit' && method === 'POST') {
-      requireAuth();
-      var uk = String(body.kode || '').toUpperCase();
+      requireRole('admin', 'staff');
+      var uk = String(body.kode || '').toUpperCase().trim();
+      var unama = String(body.nama || '').trim();
+      if (!uk || !unama) throw new Error('Kode dan nama unit wajib diisi');
       if (DB.unit.some(function (x) { return x.kode === uk; })) throw new Error('Kode unit sudah ada');
-      var nu2 = { id: nextId(DB.unit), kode: uk, nama: body.nama, aktif: 1, created_at: nowIso() };
+      var nu2 = { id: nextId(DB.unit), kode: uk, nama: unama, aktif: 1, created_at: nowIso() };
       DB.unit.push(nu2); save(); return { id: nu2.id };
     }
-    if (mUni && method === 'PUT') { requireRole('admin'); var eu2 = byId(DB.unit, mUni[1]); if (eu2) { eu2.kode = body.kode; eu2.nama = body.nama; eu2.aktif = body.aktif ? 1 : 0; } save(); return { ok: true }; }
-    if (mUni && method === 'DELETE') { requireRole('admin'); DB.unit = DB.unit.filter(function (x) { return x.id !== +mUni[1]; }); save(); return { ok: true }; }
+    if (mUni && method === 'PUT') { requireRole('admin', 'staff'); var eu2 = byId(DB.unit, mUni[1]); if (!eu2) throw new Error('Tidak ditemukan'); eu2.kode = body.kode; eu2.nama = body.nama; eu2.aktif = body.aktif ? 1 : 0; save(); return { ok: true }; }
+    if (mUni && method === 'DELETE') {
+      requireRole('admin', 'staff');
+      if (DB.arsip.some(function (a) { return String(a.unit_id) === mUni[1]; })) throw new Error('Unit masih dipakai oleh arsip');
+      DB.unit = DB.unit.filter(function (x) { return x.id !== +mUni[1]; }); save(); return { ok: true };
+    }
 
     var mIns = path.match(/^\/api\/instansi\/(\d+)$/);
     if (path === '/api/instansi' && method === 'GET') { requireAuth(); return DB.instansi.slice().sort(function (a, b) { return a.nama < b.nama ? -1 : 1; }); }
     if (path === '/api/instansi' && method === 'POST') {
-      requireAuth();
-      if (DB.instansi.some(function (x) { return x.nama === body.nama; })) throw new Error('Nama instansi sudah ada');
-      var ni = { id: nextId(DB.instansi), nama: body.nama, singkatan: body.singkatan || null, alamat: body.alamat || null, aktif: 1, created_at: nowIso() };
+      requireRole('admin', 'staff');
+      var inama = String(body.nama || '').trim();
+      if (!inama) throw new Error('Nama instansi wajib diisi');
+      if (DB.instansi.some(function (x) { return x.nama === inama; })) throw new Error('Nama instansi sudah ada');
+      var ni = { id: nextId(DB.instansi), nama: inama, singkatan: body.singkatan || null, alamat: body.alamat || null, aktif: 1, created_at: nowIso() };
       DB.instansi.push(ni); save(); return { id: ni.id };
     }
-    if (mIns && method === 'PUT') { requireRole('admin'); var ei = byId(DB.instansi, mIns[1]); if (ei) { ei.nama = body.nama; ei.singkatan = body.singkatan; ei.alamat = body.alamat; ei.aktif = body.aktif ? 1 : 0; } save(); return { ok: true }; }
-    if (mIns && method === 'DELETE') { requireRole('admin'); DB.instansi = DB.instansi.filter(function (x) { return x.id !== +mIns[1]; }); save(); return { ok: true }; }
+    if (mIns && method === 'PUT') { requireRole('admin', 'staff'); var ei = byId(DB.instansi, mIns[1]); if (!ei) throw new Error('Tidak ditemukan'); ei.nama = body.nama; ei.singkatan = body.singkatan; ei.alamat = body.alamat; ei.aktif = body.aktif ? 1 : 0; save(); return { ok: true }; }
+    if (mIns && method === 'DELETE') {
+      requireRole('admin', 'staff');
+      if (DB.arsip.some(function (a) { return String(a.instansi_id) === mIns[1]; })) throw new Error('Instansi masih dipakai oleh arsip');
+      DB.instansi = DB.instansi.filter(function (x) { return x.id !== +mIns[1]; }); save(); return { ok: true };
+    }
 
     // ---- ARSIP ----
     var mArsipId = path.match(/^\/api\/arsip\/(\d+)$/);
@@ -380,6 +439,8 @@
     if (path === '/api/arsip' && method === 'GET') {
       requireAuth();
       var s = String(query.search || '').toLowerCase();
+      var qdari = query.tanggal_dari || query.dari || '';
+      var qsampai = query.tanggal_sampai || query.sampai || '';
       var rows = DB.arsip.filter(function (a) {
         if (a.deleted_at) return false;
         if (s) {
@@ -388,8 +449,8 @@
         }
         if (query.kategori && String(a.kategori_id) !== String(query.kategori)) return false;
         if (query.status && a.status !== query.status) return false;
-        if (query.dari && a.tanggal_arsip < query.dari) return false;
-        if (query.sampai && a.tanggal_arsip > query.sampai) return false;
+        if (qdari && a.tanggal_arsip < qdari) return false;
+        if (qsampai && a.tanggal_arsip > qsampai) return false;
         if (query.lokasi && String(a.lokasi_id) !== String(query.lokasi)) return false;
         if (query.instansi && String(a.instansi_id) !== String(query.instansi)) return false;
         return true;
@@ -398,18 +459,22 @@
         return a.created_at < b.created_at ? 1 : -1;
       });
       var total = rows.length;
-      var limit = parseInt(query.limit) || 20;
-      var page = parseInt(query.page) || 1;
+      var limit = Math.min(200, Math.max(1, parseInt(query.limit) || 20));
+      var page = Math.max(1, parseInt(query.page) || 1);
       var start = (page - 1) * limit;
-      return { data: rows.slice(start, start + limit).map(joinArsip), total: total, page: page, limit: limit, totalPages: Math.ceil(total / limit) };
+      return { data: rows.slice(start, start + limit).map(joinArsip), total: total, page: page, limit: limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
     }
     if (path === '/api/arsip' && method === 'POST') {
       requireAuth();
+      var judulBaru = String(body.judul || '').trim();
+      if (!judulBaru) throw new Error('Judul arsip wajib diisi');
+      if (!validDate(body.tanggal_arsip)) throw new Error('Tanggal arsip wajib diisi dengan format YYYY-MM-DD');
       var kat = byId(DB.kategori, body.kategori_id);
       if (!kat) throw new Error('Kategori tidak valid');
+      if (body.status && ['aktif', 'arsip', 'dipinjam', 'hilang', 'rusak'].indexOf(body.status) === -1) throw new Error('Status arsip tidak valid');
       var nomor = generateNomorArsip(kat.kode);
       var a = {
-        id: nextId(DB.arsip), nomor_arsip: nomor, kategori_id: kat.id, judul: body.judul,
+        id: nextId(DB.arsip), nomor_arsip: nomor, kategori_id: kat.id, judul: judulBaru,
         nomor_surat: body.nomor_surat || null, tanggal_surat: body.tanggal_surat || null, tanggal_arsip: body.tanggal_arsip,
         pengirim: body.pengirim || null, instansi_id: body.instansi_id || null, penerima: body.penerima || null,
         unit_id: body.unit_id || null, perihal: body.perihal || null, ringkasan: body.ringkasan || null,
@@ -422,7 +487,7 @@
       save();
       return { id: a.id, nomor_arsip: nomor, kode_qr: a.kode_qr };
     }
-    if (mRestore && method === 'POST') { requireAuth(); var ra = byId(DB.arsip, mRestore[1]); if (ra) { ra.deleted_at = null; ra.updated_by = currentUser().id; } save(); return { ok: true }; }
+    if (mRestore && method === 'POST') { requireRole('admin', 'staff'); var ra = byId(DB.arsip, mRestore[1]); if (ra) { ra.deleted_at = null; ra.updated_by = currentUser().id; logAktivitas(currentUser().id, 'RESTORE', 'arsip', ra.id, 'Arsip dipulihkan: ' + ra.nomor_arsip); } save(); return { ok: true }; }
     if (mPermanen && method === 'DELETE') {
       requireRole('admin');
       DB.lampiran = DB.lampiran.filter(function (l) { return String(l.arsip_id) !== mPermanen[1]; });
@@ -450,7 +515,11 @@
     }
     if (mArsipId && method === 'PUT') {
       requireAuth();
-      var ua = byId(DB.arsip, mArsipId[1]); if (!ua) throw new Error('Tidak ditemukan');
+      var ua = byId(DB.arsip, mArsipId[1]); if (!ua) throw new Error('Arsip tidak ditemukan');
+      if (!String(body.judul || '').trim()) throw new Error('Judul arsip wajib diisi');
+      if (!validDate(body.tanggal_arsip)) throw new Error('Tanggal arsip wajib diisi dengan format YYYY-MM-DD');
+      if (!byId(DB.kategori, body.kategori_id)) throw new Error('Kategori tidak valid');
+      if (body.status && ['aktif', 'arsip', 'dipinjam', 'hilang', 'rusak'].indexOf(body.status) === -1) throw new Error('Status arsip tidak valid');
       ['kategori_id', 'judul', 'nomor_surat', 'tanggal_surat', 'tanggal_arsip', 'pengirim', 'instansi_id',
         'penerima', 'unit_id', 'perihal', 'ringkasan', 'status', 'lokasi_fisik', 'lokasi_id'].forEach(function (k) {
           if (k in body) ua[k] = body[k] === '' ? null : body[k];
@@ -468,23 +537,74 @@
 
     // ---- DISPOSISI ----
     var mDisp = path.match(/^\/api\/disposisi\/(\d+)$/);
+    if (path === '/api/disposisi' && method === 'GET') {
+      requireAuth();
+      return DB.disposisi.slice().sort(function (a, b) { return byDateDesc(a.created_at, b.created_at); })
+        .filter(function (d) { var a = byId(DB.arsip, d.arsip_id); return a && !a.deleted_at; })
+        .map(function (d) {
+          var o = joinDisposisi(d);
+          var a = byId(DB.arsip, d.arsip_id) || {};
+          var k = byId(DB.kategori, a.kategori_id) || {};
+          o.nomor_arsip = a.nomor_arsip || '';
+          o.arsip_judul = a.judul || '';
+          o.arsip_deleted_at = a.deleted_at || null;
+          o.kategori_nama = k.nama || '';
+          o.kategori_kode = k.kode || '';
+          return o;
+        });
+    }
     if (path === '/api/disposisi' && method === 'POST') {
       requireAuth();
+      var da = byId(DB.arsip, body.arsip_id);
+      if (!da || da.deleted_at) throw new Error('Arsip tujuan disposisi tidak ditemukan');
+      if (body.kepada_user) {
+        var dtarget = byId(DB.users, body.kepada_user);
+        if (!dtarget || !dtarget.aktif) throw new Error('Penerima disposisi tidak valid');
+      }
+      if (body.status && ['proses', 'diterima', 'selesai', 'ditolak'].indexOf(body.status) === -1) throw new Error('Status disposisi tidak valid');
       var d0 = {
         id: nextId(DB.disposisi), arsip_id: body.arsip_id, dari_user: currentUser().id, kepada_user: body.kepada_user || null,
-        instruksi: body.instruksi || null, status: body.status || 'proses', tanggal_disposisi: body.tanggal || today(),
+        instruksi: body.instruksi || null, status: body.status || 'proses', tanggal_disposisi: validDate(body.tanggal) ? body.tanggal : today(),
         catatan: body.catatan || null, created_by: currentUser().id, created_at: nowIso(), updated_at: nowIso()
       };
       DB.disposisi.push(d0);
       if (d0.kepada_user) {
-        var target = byId(DB.users, d0.kepada_user); var ar = byId(DB.arsip, d0.arsip_id);
-        buatNotifikasi(d0.kepada_user, 'Disposisi baru', 'Anda menerima disposisi arsip ' + (ar ? ar.nomor_arsip : ''), 'disposisi', 'arsip', d0.arsip_id);
+        buatNotifikasi(d0.kepada_user, 'Disposisi baru', 'Anda menerima disposisi arsip ' + da.nomor_arsip + ' dari ' + currentUser().nama, 'disposisi', 'arsip', d0.arsip_id);
       }
-      logAktivitas(currentUser().id, 'DISPOSISI', 'arsip', d0.arsip_id, 'Disposisi arsip: ' + d0.instruksi);
+      logAktivitas(currentUser().id, 'DISPOSISI', 'arsip', d0.arsip_id, 'Disposisi arsip: ' + (d0.instruksi || '-'));
       save(); return { id: d0.id };
     }
-    if (mDisp && method === 'PUT') { requireAuth(); var ud = byId(DB.disposisi, mDisp[1]); if (ud) { ud.status = body.status; ud.catatan = body.catatan || null; ud.updated_at = nowIso(); } save(); return { ok: true }; }
-    if (mDisp && method === 'DELETE') { requireRole('admin'); DB.disposisi = DB.disposisi.filter(function (x) { return x.id !== +mDisp[1]; }); save(); return { ok: true }; }
+    if (mDisp && method === 'PUT') {
+      requireAuth();
+      var ud = byId(DB.disposisi, mDisp[1]);
+      if (!ud) throw new Error('Disposisi tidak ditemukan');
+      var dme = currentUser();
+      if (dme.role !== 'admin' && String(ud.dari_user) !== String(dme.id) && String(ud.kepada_user) !== String(dme.id)) {
+        throw authError('Anda tidak berhak mengubah disposisi ini', 403);
+      }
+      var kepada = ('kepada_user' in body) ? (body.kepada_user || null) : ud.kepada_user;
+      if (kepada) {
+        var ktarget = byId(DB.users, kepada);
+        if (!ktarget || !ktarget.aktif) throw new Error('Penerima disposisi tidak valid');
+      }
+      var dstatus = body.status || ud.status;
+      if (['proses', 'diterima', 'selesai', 'ditolak'].indexOf(dstatus) === -1) throw new Error('Status disposisi tidak valid');
+      var dtgl = validDate(body.tanggal || body.tanggal_disposisi) ? (body.tanggal || body.tanggal_disposisi) : ud.tanggal_disposisi;
+      var kepadaLama = ud.kepada_user;
+      ud.kepada_user = kepada;
+      ud.instruksi = ('instruksi' in body) ? (body.instruksi || null) : ud.instruksi;
+      ud.status = dstatus;
+      ud.tanggal_disposisi = dtgl;
+      ud.catatan = ('catatan' in body) ? (body.catatan || null) : ud.catatan;
+      ud.updated_at = nowIso();
+      if (kepada && String(kepada) !== String(kepadaLama || '')) {
+        var arsipDisp = byId(DB.arsip, ud.arsip_id) || {};
+        buatNotifikasi(kepada, 'Disposisi baru', 'Anda menerima disposisi arsip ' + (arsipDisp.nomor_arsip || ''), 'disposisi', 'arsip', ud.arsip_id);
+      }
+      logAktivitas(dme.id, 'DISPOSISI_UPDATE', 'disposisi', ud.id, 'Status: ' + dstatus);
+      save(); return { ok: true };
+    }
+    if (mDisp && method === 'DELETE') { requireRole('admin', 'staff'); DB.disposisi = DB.disposisi.filter(function (x) { return x.id !== +mDisp[1]; }); save(); return { ok: true }; }
 
     // ---- PEMINJAMAN ----
     var mPin = path.match(/^\/api\/peminjaman\/(\d+)$/);
@@ -496,33 +616,64 @@
     }
     if (path === '/api/peminjaman' && method === 'POST') {
       requireAuth();
+      var par = byId(DB.arsip, body.arsip_id);
+      if (!par || par.deleted_at) throw new Error('Arsip yang dipinjam tidak ditemukan');
+      if (par.status === 'hilang' || par.status === 'rusak') throw new Error('Arsip hilang/rusak tidak dapat dipinjam');
+      var loanAktif = DB.peminjaman.some(function (p) {
+        return String(p.arsip_id) === String(body.arsip_id) && (p.status === 'dipinjam' || p.status === 'terlambat');
+      });
+      if (loanAktif) throw new Error('Arsip ini masih dipinjam dan belum dikembalikan');
+      if (!String(body.peminjam || '').trim()) throw new Error('Nama peminjam wajib diisi');
+      if (!validDate(body.tanggal_pinjam) || !validDate(body.tanggal_jatuh_tempo)) throw new Error('Tanggal pinjam dan jatuh tempo wajib diisi');
+      if (body.tanggal_jatuh_tempo < body.tanggal_pinjam) throw new Error('Jatuh tempo tidak boleh sebelum tanggal pinjam');
       var p0 = {
-        id: nextId(DB.peminjaman), arsip_id: body.arsip_id, peminjam: body.peminjam, unit_peminjam: body.unit_peminjam || null,
+        id: nextId(DB.peminjaman), arsip_id: body.arsip_id, peminjam: String(body.peminjam).trim(), unit_peminjam: body.unit_peminjam || null,
         alasan: body.alasan || null, tanggal_pinjam: body.tanggal_pinjam, tanggal_jatuh_tempo: body.tanggal_jatuh_tempo,
-        tanggal_kembali: body.tanggal_kembali || null, status: 'dipinjam', catatan: body.catatan || null,
+        tanggal_kembali: null, status: 'dipinjam', catatan: body.catatan || null,
         created_by: currentUser().id, created_at: nowIso(), updated_at: nowIso()
       };
       DB.peminjaman.push(p0);
-      var pa = byId(DB.arsip, body.arsip_id); if (pa) { pa.status = 'dipinjam'; pa.updated_at = nowIso(); }
-      logAktivitas(currentUser().id, 'PINJAM', 'arsip', body.arsip_id, 'Peminjaman: ' + body.peminjam + ' (' + (pa ? pa.nomor_arsip : '') + ')');
+      par.status = 'dipinjam'; par.updated_at = nowIso();
+      logAktivitas(currentUser().id, 'PINJAM', 'arsip', body.arsip_id, 'Peminjaman: ' + p0.peminjam + ' (' + par.nomor_arsip + ')');
       save(); return { id: p0.id };
     }
     if (mPin && method === 'PUT') {
       requireAuth();
-      var up = byId(DB.peminjaman, mPin[1]); if (!up) throw new Error('Tidak ditemukan');
-      up.status = body.status;
-      up.tanggal_kembali = body.tanggal_kembali || (body.status === 'dikembalikan' ? today() : null);
-      up.catatan = body.catatan || null; up.updated_at = nowIso();
-      if (body.status === 'dikembalikan') { var upa = byId(DB.arsip, up.arsip_id); if (upa) { upa.status = 'aktif'; upa.updated_at = nowIso(); } }
+      var up = byId(DB.peminjaman, mPin[1]); if (!up) throw new Error('Data peminjaman tidak ditemukan');
+      var pstatus = body.status || up.status;
+      if (['dipinjam', 'dikembalikan', 'terlambat'].indexOf(pstatus) === -1) throw new Error('Status peminjaman tidak valid');
+      var pkembali = pstatus === 'dikembalikan' ? (validDate(body.tanggal_kembali) ? body.tanggal_kembali : today()) : null;
+      up.status = pstatus;
+      up.tanggal_kembali = pkembali;
+      up.catatan = ('catatan' in body) ? (body.catatan || null) : up.catatan;
+      up.updated_at = nowIso();
+      var upa = byId(DB.arsip, up.arsip_id);
+      if (upa) {
+        if (pstatus === 'dikembalikan') { if (upa.status === 'dipinjam') upa.status = 'aktif'; }
+        else upa.status = 'dipinjam';
+        upa.updated_at = nowIso();
+      }
+      if (pstatus === 'dikembalikan') buatNotifikasi(up.created_by, 'Peminjaman dikembalikan', 'Arsip telah dikembalikan', 'info', 'arsip', up.arsip_id);
+      logAktivitas(currentUser().id, 'PEMINJAMAN_UPDATE', 'peminjaman', up.id, 'Status: ' + pstatus);
       save(); return { ok: true };
     }
-    if (mPin && method === 'DELETE') { requireRole('admin'); DB.peminjaman = DB.peminjaman.filter(function (x) { return x.id !== +mPin[1]; }); save(); return { ok: true }; }
+    if (mPin && method === 'DELETE') {
+      requireRole('admin', 'staff');
+      var dp = byId(DB.peminjaman, mPin[1]); if (!dp) throw new Error('Data peminjaman tidak ditemukan');
+      DB.peminjaman = DB.peminjaman.filter(function (x) { return x.id !== +mPin[1]; });
+      if (dp.status === 'dipinjam' || dp.status === 'terlambat') {
+        var dpa = byId(DB.arsip, dp.arsip_id);
+        if (dpa && dpa.status === 'dipinjam') { dpa.status = 'aktif'; dpa.updated_at = nowIso(); }
+      }
+      logAktivitas(currentUser().id, 'PEMINJAMAN_DELETE', 'peminjaman', dp.id, 'Hapus data peminjaman');
+      save(); return { ok: true };
+    }
 
     // ---- LAMPIRAN ----
     if (mLamp && method === 'POST') { requireAuth(); throw new Error('Gunakan window.__mockUploadLampiran'); }
     var mLampId = path.match(/^\/api\/lampiran\/(\d+)$/);
     if (mLampId && method === 'DELETE') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var dl = byId(DB.lampiran, mLampId[1]);
       if (dl) { DB.lampiran = DB.lampiran.filter(function (x) { return x.id !== +mLampId[1]; }); fileDel(dl.nama_file); }
       save(); return { ok: true };
@@ -564,9 +715,9 @@
       var ym = today().slice(0, 7);
       return {
         stats: arsipStats(), byKategori: statsByKategori(), byBulan: statsByBulan(), byStatus: statsByStatus(),
-        kegiatanHariIni: DB.agenda.filter(function (a) { return a.tanggal === today(); }),
+        kegiatanHariIni: DB.agenda.filter(function (a) { return a.tanggal === today(); }).sort(function (a, b) { return byDateAsc(a.jam_mulai || '', b.jam_mulai || ''); }),
         pinjamanAktif: DB.peminjaman.filter(function (p) { var a = byId(DB.arsip, p.arsip_id); return (p.status === 'dipinjam' || p.status === 'terlambat') && a && !a.deleted_at; }).sort(function (a, b) { return a.tanggal_jatuh_tempo < b.tanggal_jatuh_tempo ? -1 : 1; }).map(joinPeminjaman),
-        disposisiTerbaru: DB.disposisi.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 6).map(function (d) { var o = joinDisposisi(d); var a = byId(DB.arsip, d.arsip_id) || {}; o.nomor_arsip = a.nomor_arsip || ''; o.arsip_judul = a.judul || ''; return o; }),
+        disposisiTerbaru: DB.disposisi.filter(function (d) { var a = byId(DB.arsip, d.arsip_id); return a && !a.deleted_at; }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 6).map(function (d) { var o = joinDisposisi(d); var a = byId(DB.arsip, d.arsip_id) || {}; o.nomor_arsip = a.nomor_arsip || ''; o.arsip_judul = a.judul || ''; return o; }),
         arsipTerbaru: DB.arsip.filter(function (a) { return !a.deleted_at; }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 6).map(joinArsip),
         aktivitas: DB.log.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).slice(0, 8).map(function (l) { var uu = byId(DB.users, l.user_id) || {}; var o = clone(l); o.user_nama = uu.nama || ''; return o; }),
         agendaCount: DB.agenda.filter(function (a) { return (a.tanggal || '').slice(0, 7) === ym; }).length
@@ -593,20 +744,36 @@
         .sort(function (a, b) { if (a.tahun !== b.tahun) return a.tahun < b.tahun ? 1 : -1; return a.nomor_urut < b.nomor_urut ? 1 : -1; })
         .map(function (r) { var a = byId(DB.arsip, r.arsip_id) || {}; var uu = byId(DB.users, r.created_by) || {}; var o = clone(r); o.nomor_arsip = a.nomor_arsip || null; o.petugas = uu.nama || ''; return o; });
       var jml = DB.bukuAgenda.filter(function (r) { return r.jenis === jenis && r.tahun === tahun; }).length;
-      return { rows: rows2, jenis: jenis, tahun: tahun, jumlahTahunIni: jml };
+      var tahunTersedia = [];
+      DB.bukuAgenda.forEach(function (r) {
+        if (r.jenis === jenis && tahunTersedia.indexOf(r.tahun) === -1) tahunTersedia.push(r.tahun);
+      });
+      tahunTersedia.sort(function (a, b) { return b - a; });
+      return { rows: rows2, jenis: jenis, tahun: tahun, jumlahTahunIni: jml, tahunTersedia: tahunTersedia };
     }
     if (path === '/api/buku-agenda' && method === 'POST') {
       requireAuth();
+      if (!validDate(body.tanggal)) throw new Error('Tanggal agenda wajib diisi');
+      if (!String(body.perihal || '').trim()) throw new Error('Perihal wajib diisi');
+      if (body.arsip_id && !byId(DB.arsip, body.arsip_id)) throw new Error('Arsip terkait tidak ditemukan');
       var jn = body.jenis === 'keluar' ? 'keluar' : 'masuk';
       var th = parseInt(body.tahun) || new Date().getFullYear();
       var last = DB.bukuAgenda.filter(function (r) { return r.jenis === jn && r.tahun === th; }).reduce(function (m, r) { return Math.max(m, r.nomor_urut); }, 0);
       var no = last + 1;
-      var bg = { id: nextId(DB.bukuAgenda), jenis: jn, tahun: th, nomor_urut: no, tanggal: body.tanggal, nomor_surat: body.nomor_surat || null, asal_tujuan: body.asal_tujuan || null, perihal: body.perihal || null, keterangan: body.keterangan || null, arsip_id: body.arsip_id || null, created_by: currentUser().id, created_at: nowIso(), updated_at: nowIso() };
+      var bg = { id: nextId(DB.bukuAgenda), jenis: jn, tahun: th, nomor_urut: no, tanggal: body.tanggal, nomor_surat: body.nomor_surat || null, asal_tujuan: body.asal_tujuan || null, perihal: String(body.perihal).trim(), keterangan: body.keterangan || null, arsip_id: body.arsip_id || null, created_by: currentUser().id, created_at: nowIso(), updated_at: nowIso() };
       DB.bukuAgenda.push(bg);
-      logAktivitas(currentUser().id, 'AGENDA', 'buku_agenda', bg.id, 'Agenda ' + jn + ' no ' + no + '/' + th + ': ' + body.perihal);
+      logAktivitas(currentUser().id, 'AGENDA', 'buku_agenda', bg.id, 'Agenda ' + jn + ' no ' + no + '/' + th + ': ' + bg.perihal);
       save(); return { id: bg.id, nomor_urut: no };
     }
-    if (mBg && method === 'PUT') { requireAuth(); var ubg = byId(DB.bukuAgenda, mBg[1]); if (ubg) { ubg.tanggal = body.tanggal; ubg.nomor_surat = body.nomor_surat || null; ubg.asal_tujuan = body.asal_tujuan || null; ubg.perihal = body.perihal || null; ubg.keterangan = body.keterangan || null; ubg.arsip_id = body.arsip_id || null; ubg.updated_at = nowIso(); } save(); return { ok: true }; }
+    if (mBg && method === 'PUT') {
+      requireAuth();
+      var ubg = byId(DB.bukuAgenda, mBg[1]); if (!ubg) throw new Error('Agenda tidak ditemukan');
+      if (!validDate(body.tanggal)) throw new Error('Tanggal agenda wajib diisi');
+      if (!String(body.perihal || '').trim()) throw new Error('Perihal wajib diisi');
+      ubg.tanggal = body.tanggal; ubg.nomor_surat = body.nomor_surat || null; ubg.asal_tujuan = body.asal_tujuan || null;
+      ubg.perihal = String(body.perihal).trim(); ubg.keterangan = body.keterangan || null; ubg.arsip_id = body.arsip_id || null; ubg.updated_at = nowIso();
+      save(); return { ok: true };
+    }
     if (mBg && method === 'DELETE') { requireRole('admin', 'staff'); DB.bukuAgenda = DB.bukuAgenda.filter(function (x) { return x.id !== +mBg[1]; }); save(); return { ok: true }; }
 
     // ---- AGENDA KEGIATAN ----
@@ -620,12 +787,21 @@
     }
     if (path === '/api/agenda' && method === 'POST') {
       requireAuth();
-      var ag = { id: nextId(DB.agenda), judul: body.judul, tanggal: body.tanggal, jam_mulai: body.jam_mulai || null, jam_selesai: body.jam_selesai || null, lokasi: body.lokasi || null, tipe: body.tipe || 'kegiatan', keterangan: body.keterangan || null, created_by: currentUser().id, created_at: nowIso() };
+      if (!String(body.judul || '').trim()) throw new Error('Judul kegiatan wajib diisi');
+      if (!validDate(body.tanggal)) throw new Error('Tanggal kegiatan wajib diisi');
+      var ag = { id: nextId(DB.agenda), judul: String(body.judul).trim(), tanggal: body.tanggal, jam_mulai: body.jam_mulai || null, jam_selesai: body.jam_selesai || null, lokasi: body.lokasi || null, tipe: body.tipe || 'kegiatan', keterangan: body.keterangan || null, created_by: currentUser().id, created_at: nowIso() };
       DB.agenda.push(ag);
-      logAktivitas(currentUser().id, 'AGENDA', 'agenda_kegiatan', ag.id, 'Agenda: ' + body.judul);
+      logAktivitas(currentUser().id, 'AGENDA', 'agenda_kegiatan', ag.id, 'Agenda: ' + ag.judul);
       save(); return { id: ag.id };
     }
-    if (mAg && method === 'PUT') { requireAuth(); var uag = byId(DB.agenda, mAg[1]); if (uag) { uag.judul = body.judul; uag.tanggal = body.tanggal; uag.jam_mulai = body.jam_mulai || null; uag.jam_selesai = body.jam_selesai || null; uag.lokasi = body.lokasi || null; uag.tipe = body.tipe || 'kegiatan'; uag.keterangan = body.keterangan || null; } save(); return { ok: true }; }
+    if (mAg && method === 'PUT') {
+      requireAuth();
+      var uag = byId(DB.agenda, mAg[1]); if (!uag) throw new Error('Agenda tidak ditemukan');
+      if (!String(body.judul || '').trim()) throw new Error('Judul kegiatan wajib diisi');
+      if (!validDate(body.tanggal)) throw new Error('Tanggal kegiatan wajib diisi');
+      uag.judul = String(body.judul).trim(); uag.tanggal = body.tanggal; uag.jam_mulai = body.jam_mulai || null; uag.jam_selesai = body.jam_selesai || null; uag.lokasi = body.lokasi || null; uag.tipe = body.tipe || 'kegiatan'; uag.keterangan = body.keterangan || null;
+      save(); return { ok: true };
+    }
     if (mAg && method === 'DELETE') { requireRole('admin', 'staff'); DB.agenda = DB.agenda.filter(function (x) { return x.id !== +mAg[1]; }); save(); return { ok: true }; }
 
     throw new Error('Endpoint tidak dikenal: ' + method + ' ' + path);
@@ -639,7 +815,7 @@
       if (a.status === 'aktif') aktif++; else if (a.status === 'arsip') diarsipkan++;
       else if (a.status === 'dipinjam') dipinjam++; else if (a.status === 'hilang') hilang++; else if (a.status === 'rusak') rusak++;
     });
-    return { total: DB.arsip.length, aktif: aktif, diarsipkan: diarsipkan, dipinjam: dipinjam, hilang: hilang, rusak: rusak, sampah: sampah };
+    return { total: DB.arsip.filter(function (a) { return !a.deleted_at; }).length, aktif: aktif, diarsipkan: diarsipkan, dipinjam: dipinjam, hilang: hilang, rusak: rusak, sampah: sampah };
   }
   function statsByKategori() {
     return DB.kategori.map(function (k) {
@@ -647,9 +823,13 @@
     }).sort(function (a, b) { return b.jumlah - a.jumlah; });
   }
   function statsByBulan() {
+    var now = new Date();
+    var cutoff = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
+    var cutoffStr = cutoff.getFullYear() + '-' + pad(cutoff.getMonth() + 1) + '-' + pad(cutoff.getDate());
     var map = {};
     DB.arsip.forEach(function (a) {
       if (a.deleted_at || !a.tanggal_arsip) return;
+      if (a.tanggal_arsip < cutoffStr) return;
       var b = a.tanggal_arsip.slice(0, 7); map[b] = (map[b] || 0) + 1;
     });
     return Object.keys(map).sort().map(function (b) { return { bulan: b, jumlah: map[b] }; });
@@ -729,16 +909,16 @@
       return true;
     }).sort(function (a, b) { return a.tanggal_arsip < b.tanggal_arsip ? 1 : -1; });
   }
-  function laporanRows() {
-    return filteredRows().map(function (a) {
+  function laporanRows(dari, sampai, kategori) {
+    return filteredRows(dari, sampai, kategori).map(function (a) {
       var k = byId(DB.kategori, a.kategori_id) || {}; var i = byId(DB.instansi, a.instansi_id) || {};
       return { nomor_arsip: a.nomor_arsip, tanggal_arsip: a.tanggal_arsip, kategori: k.nama || '', nomor_surat: a.nomor_surat || '', judul: a.judul, perihal: a.perihal || '', pengirim: a.pengirim || '', penerima: a.penerima || '', instansi: i.nama || '', status: a.status };
     });
   }
   function csvEscape(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
   var COLMAP = { 'Nomor Arsip': 'nomor_arsip', 'Tanggal': 'tanggal_arsip', 'Kategori': 'kategori', 'No Surat': 'nomor_surat', 'Judul': 'judul', 'Perihal': 'perihal', 'Pengirim': 'pengirim', 'Penerima': 'penerima', 'Instansi': 'instansi', 'Status': 'status' };
-  function buildCsv() {
-    var rows = laporanRows();
+  function buildCsv(dari, sampai, kategori) {
+    var rows = laporanRows(dari, sampai, kategori);
     var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Status'];
     var out = [header.map(csvEscape).join(',')];
     rows.forEach(function (r) { out.push(header.map(function (h) { return csvEscape(r[COLMAP[h]]); }).join(',')); });
@@ -751,6 +931,8 @@
   window.__mockUploadLampiran = async function (arsipId, files) {
     await ensureReady();
     requireAuth();
+    if (!byId(DB.arsip, arsipId)) throw new Error('Arsip tidak ditemukan');
+    if (!files || !files.length) throw new Error('Tidak ada file yang diunggah');
     var out = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
@@ -774,13 +956,12 @@
   };
 
   window.__mockExportCsv = function (dari, sampai, kategori) {
-    filteredRows(dari, sampai, kategori); // ensure DB
-    downloadText(buildCsv(), 'rekap-arsip-' + Date.now() + '.csv', 'text/csv; charset=utf-8');
+    downloadText(buildCsv(dari, sampai, kategori), 'rekap-arsip-' + Date.now() + '.csv', 'text/csv; charset=utf-8');
   };
 
   window.__mockExportXlsx = async function (dari, sampai, kategori) {
     await ensureReady();
-    var rows = laporanRows();
+    var rows = laporanRows(dari, sampai, kategori);
     var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Status'];
     if (typeof window.XLSX === 'undefined') {
       // Fallback ke CSV bila SheetJS tidak termuat
@@ -800,7 +981,15 @@
     requireRole('admin');
     var tables = ['settings', 'users', 'kategori', 'unit', 'instansi', 'lokasi', 'arsip', 'lampiran', 'disposisi', 'peminjaman', 'bukuAgenda', 'agenda', 'log', 'notifikasi'];
     var data = {};
-    tables.forEach(function (t) { data[t] = DB[t]; });
+    tables.forEach(function (t) {
+      if (t === 'users') {
+        data[t] = DB.users.map(function (u) {
+          var o = clone(u); delete o.password_hash; return o;
+        });
+      } else {
+        data[t] = DB[t];
+      }
+    });
     var out = { aplikasi: 'Sistem Arsip Kantor Pertanahan', diekspor: new Date().toISOString(), data: data };
     downloadText(JSON.stringify(out, null, 1), 'backup-arsip-' + Date.now() + '.json', 'application/json');
   };
@@ -823,14 +1012,14 @@
 
   window.__mockImport = async function (file) {
     await ensureReady();
-    requireAuth();
+    requireRole('admin', 'staff');
     var text = await file.text();
     var rows = parseCsv(text);
     if (rows.length < 2) throw new Error('File CSV kosong (harus ada header + minimal 1 baris data)');
     var header = rows[0].map(function (h) { return String(h).trim().toLowerCase().replace(/[^a-z]/g, ''); });
     var idx = function (n) { return header.indexOf(n); };
     if (idx('judul') === -1) throw new Error('Header tidak sesuai. Minimal kolom: kategori, judul, tanggal_arsip');
-    var muat = { kategori: idx('kategori'), judul: idx('judul'), nomorsurat: idx('nomorsurat'), nomor_suratCur: idx('nomor_surat'), tanggalsurat: idx('tanggalsurat'), tanggal_arsip: idx('tanggalarsip'), pengirim: idx('pengirim'), penerima: idx('penerima'), perihal: idx('perihal'), ringkasan: idx('ringkasan'), status: idx('status'), lokasi: idx('lokasifisik') };
+    var muat = { kategori: idx('kategori'), judul: idx('judul'), nomorsurat: idx('nomorsurat'), tanggalsurat: idx('tanggalsurat'), tanggal_arsip: idx('tanggalarsip'), pengirim: idx('pengirim'), penerima: idx('penerima'), perihal: idx('perihal'), ringkasan: idx('ringkasan'), status: idx('status'), lokasi: idx('lokasifisik') };
     var masuk = 0, gagal = 0; var eror = [];
     for (var i = 1; i < rows.length; i++) {
       var r = rows[i];
@@ -846,7 +1035,7 @@
       var nomor = generateNomorArsip(kat.kode);
       DB.arsip.push({
         id: nextId(DB.arsip), nomor_arsip: nomor, kategori_id: kat.id, judul: judul,
-        nomor_surat: g('nomorsurat') || g('nomor_suratCur') || null, tanggal_surat: g('tanggalsurat') || null, tanggal_arsip: tanggal,
+        nomor_surat: g('nomorsurat') || null, tanggal_surat: g('tanggalsurat') || null, tanggal_arsip: tanggal,
         pengirim: g('pengirim') || null, instansi_id: null, penerima: g('penerima') || null, unit_id: null,
         perihal: g('perihal') || null, ringkasan: g('ringkasan') || null,
         status: ['aktif', 'arsip', 'dipinjam', 'hilang', 'rusak'].indexOf(g('status')) !== -1 ? g('status') : 'aktif',
