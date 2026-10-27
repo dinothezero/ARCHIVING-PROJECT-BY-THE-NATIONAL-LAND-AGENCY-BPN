@@ -253,12 +253,17 @@ async function showPage(page) {
   target.style.display = 'block';
   void target.offsetWidth;
   target.classList.add('active', 'entering');
-  setSidebarOpen(false);
+  if (isMobileNav()) setSidebarOpen(false);
   applyRoleVisibility();
 }
 
-/* ---- Sidebar (mobile drawer) ---- */
+/* ---- Sidebar (drawer di mobile, panel toggle di desktop) ---- */
 function isMobileNav() { return window.matchMedia('(max-width:900px)').matches; }
+function isSidebarOpen() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return false;
+  return isMobileNav() ? sb.classList.contains('open') : !sb.classList.contains('collapsed');
+}
 function setSidebarOpen(open) {
   const sb = document.getElementById('sidebar');
   const bd = document.getElementById('sidebarBackdrop');
@@ -266,14 +271,23 @@ function setSidebarOpen(open) {
   if (!sb) return;
   const show = !!open;
   const mobile = isMobileNav();
-  sb.classList.toggle('open', show);
-  if (bd) bd.classList.toggle('show', show && mobile);
+  if (mobile) {
+    sb.classList.toggle('open', show);
+    sb.classList.remove('collapsed');
+    if (bd) bd.classList.toggle('show', show);
+    if (btn) btn.classList.toggle('is-open', show);
+    document.body.classList.toggle('sidebar-open', show);
+  } else {
+    sb.classList.remove('open');
+    sb.classList.toggle('collapsed', !show);
+    if (bd) bd.classList.remove('show');
+    if (btn) btn.classList.remove('is-open');
+    document.body.classList.remove('sidebar-open');
+  }
   if (btn) {
-    btn.classList.toggle('is-open', show);
     btn.setAttribute('aria-expanded', show ? 'true' : 'false');
     btn.setAttribute('aria-label', show ? 'Tutup menu navigasi' : 'Buka menu navigasi');
   }
-  document.body.classList.toggle('sidebar-open', show && mobile);
 }
 window.__setSidebarOpen = setSidebarOpen;
 
@@ -287,7 +301,7 @@ function showLogin(silent){
   closeUserDropdown(); closeNotifDropdown();
   document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; m.classList.remove('closing','open'); });
   document.body.classList.remove('modal-open', 'print-detail');
-  setSidebarOpen(false);
+  setSidebarOpen(!isMobileNav());
   const vp = document.getElementById('verifyPage'); if (vp) vp.style.display = 'none';
   document.getElementById('loginPage').style.display = 'grid';
   document.getElementById('appPage').style.display = 'none';
@@ -407,11 +421,18 @@ loadRememberedUser();
 document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',e=>{ e.preventDefault(); showPage(item.dataset.page); }));
 document.getElementById('menuToggle').addEventListener('click', e=>{
   e.stopPropagation();
-  setSidebarOpen(!document.getElementById('sidebar').classList.contains('open'));
+  setSidebarOpen(!isSidebarOpen());
 });
 const sidebarBackdropEl=document.getElementById('sidebarBackdrop');
 if(sidebarBackdropEl) sidebarBackdropEl.addEventListener('click',()=>setSidebarOpen(false));
-window.addEventListener('resize',()=>{ if(!isMobileNav()) setSidebarOpen(false); });
+let lastMobileNav=isMobileNav();
+window.addEventListener('resize',()=>{
+  const mobile=isMobileNav();
+  if(mobile===lastMobileNav) return;
+  lastMobileNav=mobile;
+  setSidebarOpen(!mobile);
+});
+setSidebarOpen(!isMobileNav());
 
 /* ---- User menu & dropdown ---- */
 document.getElementById('userMenu').addEventListener('click', e=>{ e.stopPropagation(); toggleUserDropdown(); });
@@ -637,7 +658,7 @@ document.addEventListener('keydown', e=>{
   const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display!=='none' && !m.classList.contains('closing'));
   if(open.length){ closeModal(open[open.length-1].id); return; }
   closeUserDropdown(); closeNotifDropdown();
-  setSidebarOpen(false);
+  if(isMobileNav()) setSidebarOpen(false);
 });
 
 /* ============ MASTER DATA DROPDOWNS ============ */

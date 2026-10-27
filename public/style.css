@@ -94,8 +94,6 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .topbar-menu:hover{background:var(--green-50)}
 .topbar-menu .ic-close{display:none}
 .topbar-menu.is-open{background:var(--green-100);color:var(--green-700)}
-.topbar-menu.is-open .ic-menu{display:none}
-.topbar-menu.is-open .ic-close{display:block}
 .topbar-brand{display:flex;align-items:center;gap:13px;min-width:0}
 .topbar-emblem{flex-shrink:0}
 .topbar-emblem img{display:block;width:40px;height:40px;border-radius:11px;filter:drop-shadow(0 3px 8px rgba(6,37,29,.16))}
@@ -135,7 +133,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 
 /* ---- SIDEBAR ---- */
 .sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--green-900);color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;position:sticky;top:72px;height:calc(100vh - 72px);transition:margin-left .25s cubic-bezier(.22,.8,.3,1),transform .25s cubic-bezier(.22,.8,.3,1)}
-.sidebar.open{margin-left:calc(var(--sidebar-w) * -1)}
+.sidebar.collapsed{margin-left:calc(var(--sidebar-w) * -1)}
 .nav-section-label{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(255,255,255,.4);padding:0 12px;margin-bottom:12px}
 .sidebar-nav{display:flex;flex-direction:column;gap:4px;flex:1}
 .nav-item{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:11px;color:rgba(255,255,255,.72);font-size:14px;font-weight:500;transition:background .15s,color .15s,transform .12s}
@@ -377,11 +375,13 @@ body.modal-open{overflow:hidden}
   .login-brand-panel{display:none}
   .login-mobile-logo{display:block;text-align:center}
   .app-topbar{padding:0 16px}
-  .sidebar{position:fixed;left:0;top:72px;bottom:0;width:260px;transform:translateX(-100%);transition:transform .25s cubic-bezier(.22,.8,.3,1);z-index:70;box-shadow:var(--sh-lg);height:calc(100vh - 72px)}
+  .sidebar{position:fixed;left:0;top:72px;bottom:0;width:260px;margin-left:0;transform:translateX(-100%);transition:transform .25s cubic-bezier(.22,.8,.3,1);z-index:70;box-shadow:var(--sh-lg);height:calc(100vh - 72px)}
   .sidebar.open{transform:translateX(0)}
   .sidebar-backdrop{display:block}
   .main{padding:20px 16px 30px}
   .topbar-menu{display:inline-flex}
+  .topbar-menu.is-open .ic-menu{display:none}
+  .topbar-menu.is-open .ic-close{display:block}
 }
 @media(max-width:560px){
   .stats-grid{grid-template-columns:1fr 1fr;gap:12px}
