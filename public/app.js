@@ -319,8 +319,8 @@ function showApp(user){
   roleChip.textContent = meta.label;
   roleChip.className = 'role-chip ' + meta.chip;
   document.getElementById('udName').textContent = user.nama;
-  document.getElementById('udRole').textContent = [user.jabatan, meta.label].filter(Boolean).join(' · ');
-  const um = document.getElementById('userMenu'); if (um) um.title = [user.nama, user.jabatan].filter(Boolean).join(' — ');
+  document.getElementById('udRole').textContent = meta.label;
+  const um = document.getElementById('userMenu'); if (um) um.title = user.nama;
   const perm = document.getElementById('udPerm'); if (perm) perm.textContent = ROLE_PERM[user.role] || '';
   applyRoleVisibility();
   loadNotifikasi();
@@ -499,7 +499,6 @@ function openAkunSettings(){
   const u = state.currentUser; if(!u) return;
   akunDraft.foto = undefined;
   document.getElementById('akunNama').value = u.nama || '';
-  document.getElementById('akunJabatan').value = u.jabatan || '';
   document.getElementById('akunUsername').value = u.username || '';
   const roleSelect = document.getElementById('akunRole');
   roleSelect.value = u.role || 'staff';
@@ -552,7 +551,7 @@ document.getElementById('akunFotoInput').addEventListener('change', async e=>{
 document.getElementById('btnSimpanAkun').addEventListener('click', async ()=>{
   const nama = document.getElementById('akunNama').value.trim();
   if(!nama){ toast('Nama tampilan wajib diisi','error'); return; }
-  const body = { nama, jabatan: document.getElementById('akunJabatan').value.trim() };
+  const body = { nama };
   if(akunDraft.foto !== undefined) body.foto = akunDraft.foto;
   if(isAdmin()){
     const newRole = document.getElementById('akunRole').value;
@@ -1372,7 +1371,7 @@ async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('
   const ca=document.getElementById('rcCountAdmin'); if(ca) ca.textContent=counts.admin+' pengguna';
   const cs=document.getElementById('rcCountStaff'); if(cs) cs.textContent=counts.staff+' pengguna';
   const ck=document.getElementById('rcCountKepala'); if(ck) ck.textContent=counts.kepala+' pengguna';
-  tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); const av=isFotoSrc(u.foto)?`<div class="user-avatar ${meta.avatar} has-foto"><img src="${esc(u.foto)}" alt=""></div>`:`<div class="user-avatar ${meta.avatar}">${esc((u.nama||'?').charAt(0).toUpperCase())}</div>`; return `<tr><td><div class="user-cell">${av}<div class="user-cell-meta"><strong>${esc(u.nama)}</strong><span>${esc(u.jabatan||meta.label)}</span></div></div></td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
+  tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); const av=isFotoSrc(u.foto)?`<div class="user-avatar ${meta.avatar} has-foto"><img src="${esc(u.foto)}" alt=""></div>`:`<div class="user-avatar ${meta.avatar}">${esc((u.nama||'?').charAt(0).toUpperCase())}</div>`; return `<tr><td><div class="user-cell">${av}<div class="user-cell-meta"><strong>${esc(u.nama)}</strong><span>${meta.label}</span></div></div></td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
   </div></td></tr>`; }).join('');
@@ -1454,7 +1453,6 @@ function openTambahUser(){
   document.getElementById('userId').value='';
   const un=document.getElementById('uUsername'); un.value=''; un.disabled=false;
   document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff';
-  document.getElementById('uJabatan').value='';
   const pw=document.getElementById('uPassword'); pw.value=''; pw.type='password';
   document.getElementById('uPassField').style.display='block'; document.getElementById('uAktifField').style.display='none';
   syncRoleHint();
@@ -1465,7 +1463,6 @@ window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
   document.getElementById('userId').value=u.id;
   const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
-  document.getElementById('uJabatan').value=u.jabatan||'';
   document.getElementById('uAktif').value=String(u.aktif);
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
   syncRoleHint();
@@ -1490,9 +1487,8 @@ document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
   if(!nama){ toast('Nama lengkap wajib diisi','error'); return; }
   const btn=document.getElementById('btnSimpanUser'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
   try{
-    const jabatan=document.getElementById('uJabatan').value.trim();
     if(id){
-      const b={nama,jabatan,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'};
+      const b={nama,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'};
       await api('/api/users/'+id,{method:'PUT',body:b});
       if(state.currentUser && Number(id)===Number(state.currentUser.id)){ try{ const me=await api('/api/me'); state.currentUser=me.user; showApp(me.user); }catch(e){} }
       toast('Pengguna diperbarui','success');
@@ -1501,7 +1497,7 @@ document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
       const password=document.getElementById('uPassword').value;
       if(!username){ toast('Username wajib diisi','error'); return; }
       if(password.length<6){ toast('Password minimal 6 karakter','error'); return; }
-      await api('/api/users',{method:'POST',body:{username,nama,jabatan,role:document.getElementById('uRole').value,password}});
+      await api('/api/users',{method:'POST',body:{username,nama,role:document.getElementById('uRole').value,password}});
       toast('Pengguna ditambahkan','success');
     }
     state.userList=null;

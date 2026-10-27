@@ -191,14 +191,12 @@ router.post('/ganti-password', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Profil sendiri: nama, jabatan, foto. Role hanya bisa diubah oleh admin dengan validasi.
+// Profil sendiri: nama, foto. Role hanya bisa diubah oleh admin dengan validasi.
 router.put('/akun', requireAuth, (req, res) => {
   const body = req.body || {};
   const nama = String(body.nama || '').trim();
   if (!nama) return res.status(400).json({ error: 'Nama tampilan wajib diisi' });
   if (nama.length > 80) return res.status(400).json({ error: 'Nama tampilan maksimal 80 karakter' });
-  const jabatan = body.jabatan === undefined ? String(req.user.jabatan || '') : String(body.jabatan || '').trim();
-  if (jabatan.length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   let foto = req.user.foto || null;
   if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
     const f = parseFoto(body.foto);
@@ -221,7 +219,7 @@ router.put('/akun', requireAuth, (req, res) => {
     role = newRole;
   }
 
-  q.updateProfileWithRole.run(nama, jabatan || null, foto, role, req.session.userId);
+  q.updateProfileWithRole.run(nama, foto, role, req.session.userId);
   q.logAktivitas(req.session.userId, 'PROFILE', 'users', req.session.userId, 'Perbarui profil akun');
   req.session.userName = nama;
   req.session.userRole = role;
@@ -250,15 +248,14 @@ router.get('/users/ringkas', requireAuth, (req, res) => {
   res.json(q.getUserRingkas.all().filter(u => u.aktif));
 });
 router.post('/users', requireAuth, requireRole('admin'), (req, res) => {
-  const { username, nama, jabatan, role, password } = req.body || {};
+  const { username, nama, role, password } = req.body || {};
   if (!String(username || '').trim() || !String(nama || '').trim() || !password || String(password).length < 6) {
     return res.status(400).json({ error: 'Data tidak lengkap / password minimal 6 karakter' });
   }
   if (!ROLE_VALID.includes(role || 'staff')) return res.status(400).json({ error: 'Role tidak valid' });
-  if (String(jabatan || '').trim().length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   try {
     const namaBersih = String(nama).trim();
-    const r = q.insertUser.run(String(username).trim(), bcrypt.hashSync(String(password), 10), namaBersih, String(jabatan || '').trim() || null, role || 'staff');
+    const r = q.insertUser.run(String(username).trim(), bcrypt.hashSync(String(password), 10), namaBersih, null, role || 'staff');
     q.logAktivitas(req.session.userId, 'USER_CREATE', 'users', r.lastInsertRowid, `User: ${username}`);
     res.json({ id: r.lastInsertRowid });
   } catch (e) { res.status(400).json({ error: 'Username sudah dipakai' }); }
@@ -270,8 +267,6 @@ router.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   const { nama, role, aktif } = req.body || {};
   if (!String(nama || '').trim()) return res.status(400).json({ error: 'Nama tidak boleh kosong' });
   if (!ROLE_VALID.includes(role)) return res.status(400).json({ error: 'Role tidak valid' });
-  const jabatan = Object.prototype.hasOwnProperty.call(req.body || {}, 'jabatan') ? String(req.body.jabatan || '').trim() : String(target.jabatan || '');
-  if (jabatan.length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   const jadiAktif = aktif ? 1 : 0;
   if (id === req.session.userId && (!jadiAktif || role !== 'admin')) {
     return res.status(400).json({ error: 'Anda tidak dapat menonaktifkan atau menurunkan role akun sendiri' });
@@ -279,7 +274,7 @@ router.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   if (target.role === 'admin' && target.aktif && (!jadiAktif || role !== 'admin') && q.countActiveAdmins.get().c <= 1) {
     return res.status(400).json({ error: 'Harus tersisa minimal satu admin aktif' });
   }
-  q.updateUser.run(String(nama).trim(), jabatan || null, role, jadiAktif, id);
+  q.updateUser.run(String(nama).trim(), null, role, jadiAktif, id);
   q.logAktivitas(req.session.userId, 'USER_UPDATE', 'users', id, `User id ${id}`);
   res.json({ ok: true });
 });

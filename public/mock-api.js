@@ -332,8 +332,6 @@
       var an = String(body.nama || '').trim();
       if (!an) throw new Error('Nama tampilan wajib diisi');
       if (an.length > 80) throw new Error('Nama tampilan maksimal 80 karakter');
-      var aj = body.jabatan === undefined ? String(au.jabatan || '') : String(body.jabatan || '').trim();
-      if (aj.length > 80) throw new Error('Jabatan maksimal 80 karakter');
       if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
         if (body.foto === null || body.foto === '') au.foto = null;
         else if (typeof body.foto === 'string' && /^data:image\/(?:png|jpe?g|webp);base64,/.test(body.foto)) {
@@ -341,7 +339,7 @@
           au.foto = body.foto;
         } else throw new Error('Format foto tidak didukung');
       }
-      au.nama = an; au.jabatan = aj || null;
+      au.nama = an;
       if (Object.prototype.hasOwnProperty.call(body, 'role')) {
         if (au.role !== 'admin') throw new Error('Hanya Administrator yang dapat mengubah role');
         if (!['admin', 'staff', 'kepala'].includes(body.role)) throw new Error('Role tidak valid');
@@ -392,9 +390,8 @@
       var rl = body.role || 'staff';
       if (!un || !nm || !body.password || String(body.password).length < 6) throw new Error('Data tidak lengkap / password minimal 6 karakter');
       if (['admin', 'staff', 'kepala'].indexOf(rl) === -1) throw new Error('Role tidak valid');
-      if (String(body.jabatan || '').trim().length > 80) throw new Error('Jabatan maksimal 80 karakter');
       if (DB.users.some(function (x) { return x.username === un; })) throw new Error('Username sudah dipakai');
-      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, jabatan: String(body.jabatan || '').trim() || null, foto: null, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
+      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, jabatan: null, foto: null, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
       DB.users.push(nu);
       logAktivitas(currentUser().id, 'USER_CREATE', 'users', nu.id, 'User: ' + un);
       save();
@@ -407,8 +404,6 @@
       var enama = String(body.nama || '').trim();
       if (!enama) throw new Error('Nama tidak boleh kosong');
       if (['admin', 'staff', 'kepala'].indexOf(body.role) === -1) throw new Error('Role tidak valid');
-      var ejab = Object.prototype.hasOwnProperty.call(body, 'jabatan') ? String(body.jabatan || '').trim() : String(eu.jabatan || '');
-      if (ejab.length > 80) throw new Error('Jabatan maksimal 80 karakter');
       var jadiAktif = body.aktif ? 1 : 0;
       var meId = currentUser().id;
       if (String(eu.id) === String(meId) && (!jadiAktif || body.role !== 'admin')) {
@@ -418,7 +413,7 @@
       if (eu.role === 'admin' && eu.aktif && (!jadiAktif || body.role !== 'admin') && adminAktif <= 1) {
         throw new Error('Harus tersisa minimal satu admin aktif');
       }
-      eu.nama = enama; eu.jabatan = ejab || null; eu.role = body.role; eu.aktif = jadiAktif;
+      eu.nama = enama; eu.role = body.role; eu.aktif = jadiAktif;
       logAktivitas(meId, 'USER_UPDATE', 'users', eu.id, 'User id ' + eu.id);
       save(); return { ok: true };
     }
