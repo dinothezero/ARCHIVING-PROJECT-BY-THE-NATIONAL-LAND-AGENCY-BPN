@@ -524,11 +524,7 @@ body.modal-open{overflow:hidden}
 .sidebar-foot-note .foot-dot{animation:pulseRing 2.2s infinite}
 
 /* ---- GOV STRIPE ---- */
-.gov-stripe{height:3px;display:flex;position:relative;z-index:65}
-.gov-stripe span{flex:1}
-.st-gold{background:linear-gradient(90deg,#c9a24b,#e7cd8f,#c9a24b);background-size:200% 100%;animation:stripeShift 3.5s linear infinite}
-.st-green{background:#176a54}
-.st-teal{background:#2aa07e}
+.gov-stripe{height:3px;position:relative;z-index:65;background:linear-gradient(90deg,var(--gold) 0%,#d8bd7e 22%,var(--green-700) 55%,var(--green-600) 78%,var(--green-500) 100%)}
 
 /* ---- TOP CLOCK ---- */
 .top-clock{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;padding:6px 12px;border-left:1px solid var(--line);margin-left:2px}
