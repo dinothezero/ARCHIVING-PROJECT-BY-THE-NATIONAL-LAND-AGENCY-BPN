@@ -292,6 +292,21 @@ function showLogin(silent){
   document.getElementById('appPage').style.display = 'none';
   if (!silent) { const el = document.getElementById('loginError'); if (el) el.style.display = 'none'; }
 }
+function isFotoSrc(v){ return typeof v === 'string' && /^data:image\/(?:png|jpe?g|webp);base64,/.test(v); }
+function paintAvatar(el, user, baseClass){
+  if(!el) return;
+  const meta = roleMeta(user.role);
+  el.className = (baseClass || 'user-avatar') + ' ' + meta.avatar + (isFotoSrc(user.foto) ? ' has-foto' : '');
+  el.textContent = '';
+  if(isFotoSrc(user.foto)){
+    const img = document.createElement('img');
+    img.src = user.foto;
+    img.alt = '';
+    el.appendChild(img);
+  } else {
+    el.textContent = (user.nama || '?').charAt(0).toUpperCase();
+  }
+}
 function showApp(user){
   const vp = document.getElementById('verifyPage'); if (vp) vp.style.display = 'none';
   document.getElementById('loginPage').style.display = 'none';
@@ -299,14 +314,13 @@ function showApp(user){
   state.currentUser = user;
   const meta = roleMeta(user.role);
   document.getElementById('userName').textContent = user.nama;
-  const av = document.getElementById('userAvatar');
-  av.textContent = (user.nama||'?').charAt(0).toUpperCase();
-  av.className = 'user-avatar ' + meta.avatar;
+  paintAvatar(document.getElementById('userAvatar'), user);
   const roleChip = document.getElementById('userRole');
   roleChip.textContent = meta.label;
   roleChip.className = 'role-chip ' + meta.chip;
   document.getElementById('udName').textContent = user.nama;
-  document.getElementById('udRole').textContent = meta.label + ' · ' + meta.summary;
+  document.getElementById('udRole').textContent = [user.jabatan, meta.label].filter(Boolean).join(' · ');
+  const um = document.getElementById('userMenu'); if (um) um.title = [user.nama, user.jabatan].filter(Boolean).join(' — ');
   const perm = document.getElementById('udPerm'); if (perm) perm.textContent = ROLE_PERM[user.role] || '';
   applyRoleVisibility();
   loadNotifikasi();
@@ -404,6 +418,7 @@ document.getElementById('userMenu').addEventListener('keydown', e=>{
   if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); toggleUserDropdown(); }
   else if(e.key==='Escape'){ closeUserDropdown(); }
 });
+document.getElementById('btnAkun').addEventListener('click',()=>{ closeUserDropdown(); openAkunSettings(); });
 document.getElementById('btnGantiPass').addEventListener('click',()=>{ closeUserDropdown(); openGantiPass(); });
 document.addEventListener('click',()=>{ closeUserDropdown(); closeNotifDropdown(); });
 function setDropdown(el, open){
@@ -468,6 +483,94 @@ document.getElementById('btnGantiPassSubmit').addEventListener('click', async ()
   try{ await api('/api/ganti-password',{method:'POST',body:{passwordLama:lama,passwordBaru:baru}}); toast('Password berhasil diganti','success'); closeModal('modalGantiPass'); updatePwStrength(); }
   catch(err){ toast(err.message,'error'); }
   finally{ btn.disabled=false; btn.textContent=old; }
+});
+
+/* ---- Pengaturan akun: foto, nama, jabatan ---- */
+const akunDraft = { foto: undefined };
+function akunFotoValue(){
+  return akunDraft.foto === undefined ? (state.currentUser && state.currentUser.foto) : akunDraft.foto;
+}
+function renderAkunPreview(){
+  const u = state.currentUser; if(!u) return;
+  paintAvatar(document.getElementById('akunAvatar'), { nama:u.nama, role:u.role, foto:akunFotoValue() }, 'akun-avatar');
+  const del = document.getElementById('btnHapusFoto'); if(del) del.disabled = !isFotoSrc(akunFotoValue());
+}
+function openAkunSettings(){
+  const u = state.currentUser; if(!u) return;
+  akunDraft.foto = undefined;
+  document.getElementById('akunNama').value = u.nama || '';
+  document.getElementById('akunJabatan').value = u.jabatan || '';
+  document.getElementById('akunUsername').value = u.username || '';
+  const roleSelect = document.getElementById('akunRole');
+  roleSelect.value = u.role || 'staff';
+  const roleHint = document.getElementById('akunRoleHint');
+  if(isAdmin()){
+    roleSelect.disabled = false;
+    roleHint.style.display = 'none';
+  } else {
+    roleSelect.disabled = true;
+    roleHint.style.display = 'block';
+  }
+  document.getElementById('akunFotoInput').value = '';
+  renderAkunPreview();
+  openModal('modalAkun');
+}
+function resizeAkunFoto(file, size, quality){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('decode'));
+      img.onload = () => {
+        try{
+          const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          const s = Math.min(w, h);
+          const c = document.createElement('canvas'); c.width = size; c.height = size;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+          ctx.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, size, size);
+          resolve(c.toDataURL('image/jpeg', quality));
+        }catch(err){ reject(err); }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+document.getElementById('btnPilihFoto').addEventListener('click',()=>document.getElementById('akunFotoInput').click());
+document.getElementById('btnHapusFoto').addEventListener('click',()=>{ akunDraft.foto = null; renderAkunPreview(); });
+document.getElementById('akunFotoInput').addEventListener('change', async e=>{
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  if(['image/png','image/jpeg','image/webp'].indexOf(f.type) === -1){ toast('Pilih file JPG, PNG, atau WebP','error'); e.target.value=''; return; }
+  if(f.size > 2 * 1024 * 1024){ toast('Ukuran foto maksimal 2 MB','error'); e.target.value=''; return; }
+  try{ akunDraft.foto = await resizeAkunFoto(f, 256, .86); renderAkunPreview(); }
+  catch(err){ toast('Foto gagal diproses','error'); }
+  e.target.value = '';
+});
+document.getElementById('btnSimpanAkun').addEventListener('click', async ()=>{
+  const nama = document.getElementById('akunNama').value.trim();
+  if(!nama){ toast('Nama tampilan wajib diisi','error'); return; }
+  const body = { nama, jabatan: document.getElementById('akunJabatan').value.trim() };
+  if(akunDraft.foto !== undefined) body.foto = akunDraft.foto;
+  if(isAdmin()){
+    const newRole = document.getElementById('akunRole').value;
+    if(newRole && newRole !== state.currentUser.role){
+      body.role = newRole;
+    }
+  }
+  const btn = document.getElementById('btnSimpanAkun'); const old = btn.textContent; btn.disabled = true; btn.textContent = 'Menyimpan...';
+  try{
+    const data = await api('/api/akun', { method:'PUT', body });
+    state.currentUser = data.user;
+    state.userList = null; state.userMap = {};
+    showApp(data.user);
+    if(document.getElementById('page-users').classList.contains('active')) loadUsersPage();
+    closeModal('modalAkun');
+    toast('Pengaturan akun disimpan','success');
+  }catch(err){ toast(err.message,'error'); }
+  finally{ btn.disabled = false; btn.textContent = old; }
 });
 
 /* ---- Notifikasi ---- */
@@ -1269,7 +1372,7 @@ async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('
   const ca=document.getElementById('rcCountAdmin'); if(ca) ca.textContent=counts.admin+' pengguna';
   const cs=document.getElementById('rcCountStaff'); if(cs) cs.textContent=counts.staff+' pengguna';
   const ck=document.getElementById('rcCountKepala'); if(ck) ck.textContent=counts.kepala+' pengguna';
-  tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); return `<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
+  tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); const av=isFotoSrc(u.foto)?`<div class="user-avatar ${meta.avatar} has-foto"><img src="${esc(u.foto)}" alt=""></div>`:`<div class="user-avatar ${meta.avatar}">${esc((u.nama||'?').charAt(0).toUpperCase())}</div>`; return `<tr><td><div class="user-cell">${av}<div class="user-cell-meta"><strong>${esc(u.nama)}</strong><span>${esc(u.jabatan||meta.label)}</span></div></div></td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
   </div></td></tr>`; }).join('');
@@ -1317,7 +1420,9 @@ function setUserTab(tab){
   if(useReset){
     const u=state.userMap[id];
     if(u){
-      document.getElementById('resetAvatar').textContent=(u.nama||'?').charAt(0).toUpperCase();
+      const ra=document.getElementById('resetAvatar');
+      if(isFotoSrc(u.foto)){ ra.className='reset-avatar has-foto'; ra.innerHTML=`<img src="${esc(u.foto)}" alt="">`; }
+      else { ra.className='reset-avatar'; ra.textContent=(u.nama||'?').charAt(0).toUpperCase(); }
       document.getElementById('resetNama').textContent=u.nama||'—';
       document.getElementById('resetUsername').textContent='@'+(u.username||'');
       document.getElementById('resetRoleChip').textContent=ROLE_NAMES[u.role]||u.role||'Staf';
@@ -1349,6 +1454,7 @@ function openTambahUser(){
   document.getElementById('userId').value='';
   const un=document.getElementById('uUsername'); un.value=''; un.disabled=false;
   document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff';
+  document.getElementById('uJabatan').value='';
   const pw=document.getElementById('uPassword'); pw.value=''; pw.type='password';
   document.getElementById('uPassField').style.display='block'; document.getElementById('uAktifField').style.display='none';
   syncRoleHint();
@@ -1359,6 +1465,7 @@ window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
   document.getElementById('userId').value=u.id;
   const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
+  document.getElementById('uJabatan').value=u.jabatan||'';
   document.getElementById('uAktif').value=String(u.aktif);
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
   syncRoleHint();
@@ -1369,6 +1476,7 @@ window.resetPass=function(id){ const u=state.userMap[id]; if(!u)return;
   document.getElementById('userId').value=u.id;
   const un=document.getElementById('uUsername'); un.value=u.username; un.disabled=true;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
+  document.getElementById('uJabatan').value=u.jabatan||'';
   document.getElementById('uAktif').value=String(u.aktif);
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
   syncRoleHint();
@@ -1382,15 +1490,18 @@ document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
   if(!nama){ toast('Nama lengkap wajib diisi','error'); return; }
   const btn=document.getElementById('btnSimpanUser'); const old=btn.textContent; btn.disabled=true; btn.textContent='Menyimpan...';
   try{
+    const jabatan=document.getElementById('uJabatan').value.trim();
     if(id){
-      const b={nama,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'};
-      await api('/api/users/'+id,{method:'PUT',body:b}); toast('Pengguna diperbarui','success');
+      const b={nama,jabatan,role:document.getElementById('uRole').value,aktif:document.getElementById('uAktif').value==='1'};
+      await api('/api/users/'+id,{method:'PUT',body:b});
+      if(state.currentUser && Number(id)===Number(state.currentUser.id)){ try{ const me=await api('/api/me'); state.currentUser=me.user; showApp(me.user); }catch(e){} }
+      toast('Pengguna diperbarui','success');
     } else {
       const username=document.getElementById('uUsername').value.trim();
       const password=document.getElementById('uPassword').value;
       if(!username){ toast('Username wajib diisi','error'); return; }
       if(password.length<6){ toast('Password minimal 6 karakter','error'); return; }
-      await api('/api/users',{method:'POST',body:{username,nama,role:document.getElementById('uRole').value,password}});
+      await api('/api/users',{method:'POST',body:{username,nama,jabatan,role:document.getElementById('uRole').value,password}});
       toast('Pengguna ditambahkan','success');
     }
     state.userList=null;
@@ -1920,6 +2031,7 @@ function buildStaticCmdk(q){
   const acts=[];
   if(canManage()) acts.push({title:'Tambah Arsip Baru',sub:'Buka formulir arsip',icon:ICONS.plus,kbd:'N',run:()=>openTambahArsip()});
   if(isAdmin()) acts.push({title:'Profil Kantor',sub:'Identitas, kop surat, dan cadangan',icon:ICONS.edit,run:()=>showPage('profil')});
+  acts.push({title:'Pengaturan Akun',sub:'Foto, nama, dan jabatan',icon:ICONS.edit,run:()=>openAkunSettings()});
   acts.push({title:'Ganti Password',sub:'Perbarui kata sandi akun',icon:ICONS.edit,run:()=>openGantiPass()});
   acts.push({title:'Pintasan Keyboard',sub:'Lihat daftar pintasan',icon:ICONS.grid,kbd:'?',run:()=>showShortcuts()});
   if(canManage()) acts.push({title:'Import CSV',sub:'Impor arsip dari berkas CSV',icon:ICONS.plus,run:()=>openImportModal()});

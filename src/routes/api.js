@@ -38,6 +38,13 @@ function validDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
 const ARSIP_STATUS = ['aktif', 'arsip', 'dipinjam', 'hilang', 'rusak'];
 const DISPOSISI_STATUS = ['proses', 'diterima', 'selesai', 'ditolak'];
 const ROLE_VALID = ['admin', 'staff', 'kepala'];
+const FOTO_PREFIX = /^data:image\/(?:png|jpe?g|webp);base64,/;
+function parseFoto(v) {
+  if (v === null || v === '') return { ok: true, value: null };
+  if (typeof v !== 'string' || !FOTO_PREFIX.test(v)) return { ok: false };
+  if (v.length > 500 * 1024) return { ok: false, tooLarge: true };
+  return { ok: true, value: v };
+}
 
 /* ============ PEMBATAS PERCOBAAN (in-memory) ============ */
 // Cukup untuk instalasi kantor: mencegah tebak-tebakan password beruntun.
@@ -132,7 +139,7 @@ router.post('/login', (req, res) => {
     req.session.userId = user.id;
     req.session.userRole = user.role;
     req.session.userName = user.nama;
-    res.json({ user: { id: user.id, username: user.username, nama: user.nama, role: user.role } });
+    res.json({ user: { id: user.id, username: user.username, nama: user.nama, jabatan: user.jabatan || null, foto: user.foto || null, role: user.role } });
   });
 });
 
@@ -184,6 +191,43 @@ router.post('/ganti-password', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Profil sendiri: nama, jabatan, foto. Role hanya bisa diubah oleh admin dengan validasi.
+router.put('/akun', requireAuth, (req, res) => {
+  const body = req.body || {};
+  const nama = String(body.nama || '').trim();
+  if (!nama) return res.status(400).json({ error: 'Nama tampilan wajib diisi' });
+  if (nama.length > 80) return res.status(400).json({ error: 'Nama tampilan maksimal 80 karakter' });
+  const jabatan = body.jabatan === undefined ? String(req.user.jabatan || '') : String(body.jabatan || '').trim();
+  if (jabatan.length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
+  let foto = req.user.foto || null;
+  if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
+    const f = parseFoto(body.foto);
+    if (!f.ok) return res.status(400).json({ error: f.tooLarge ? 'Ukuran foto terlalu besar (maksimal ±350 KB)' : 'Format foto tidak didukung' });
+    foto = f.value;
+  }
+
+  let role = req.user.role;
+  if (Object.prototype.hasOwnProperty.call(body, 'role')) {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Hanya Administrator yang dapat mengubah role' });
+    }
+    if (!ROLE_VALID.includes(body.role)) {
+      return res.status(400).json({ error: 'Role tidak valid' });
+    }
+    const newRole = body.role;
+    if (newRole !== 'admin' && q.countActiveAdmins.get().c <= 1) {
+      return res.status(400).json({ error: 'Harus tersisa minimal satu admin aktif' });
+    }
+    role = newRole;
+  }
+
+  q.updateProfileWithRole.run(nama, jabatan || null, foto, role, req.session.userId);
+  q.logAktivitas(req.session.userId, 'PROFILE', 'users', req.session.userId, 'Perbarui profil akun');
+  req.session.userName = nama;
+  req.session.userRole = role;
+  res.json({ user: q.getUserById.get(req.session.userId) });
+});
+
 /* ============ NOTIFIKASI ============ */
 router.get('/notifikasi', requireAuth, (req, res) => {
   const list = q.getNotifikasiUser.all(req.session.userId);
@@ -206,14 +250,15 @@ router.get('/users/ringkas', requireAuth, (req, res) => {
   res.json(q.getUserRingkas.all().filter(u => u.aktif));
 });
 router.post('/users', requireAuth, requireRole('admin'), (req, res) => {
-  const { username, nama, role, password } = req.body || {};
+  const { username, nama, jabatan, role, password } = req.body || {};
   if (!String(username || '').trim() || !String(nama || '').trim() || !password || String(password).length < 6) {
     return res.status(400).json({ error: 'Data tidak lengkap / password minimal 6 karakter' });
   }
   if (!ROLE_VALID.includes(role || 'staff')) return res.status(400).json({ error: 'Role tidak valid' });
+  if (String(jabatan || '').trim().length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   try {
     const namaBersih = String(nama).trim();
-    const r = q.insertUser.run(String(username).trim(), bcrypt.hashSync(String(password), 10), namaBersih, role || 'staff');
+    const r = q.insertUser.run(String(username).trim(), bcrypt.hashSync(String(password), 10), namaBersih, String(jabatan || '').trim() || null, role || 'staff');
     q.logAktivitas(req.session.userId, 'USER_CREATE', 'users', r.lastInsertRowid, `User: ${username}`);
     res.json({ id: r.lastInsertRowid });
   } catch (e) { res.status(400).json({ error: 'Username sudah dipakai' }); }
@@ -225,6 +270,8 @@ router.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   const { nama, role, aktif } = req.body || {};
   if (!String(nama || '').trim()) return res.status(400).json({ error: 'Nama tidak boleh kosong' });
   if (!ROLE_VALID.includes(role)) return res.status(400).json({ error: 'Role tidak valid' });
+  const jabatan = Object.prototype.hasOwnProperty.call(req.body || {}, 'jabatan') ? String(req.body.jabatan || '').trim() : String(target.jabatan || '');
+  if (jabatan.length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   const jadiAktif = aktif ? 1 : 0;
   if (id === req.session.userId && (!jadiAktif || role !== 'admin')) {
     return res.status(400).json({ error: 'Anda tidak dapat menonaktifkan atau menurunkan role akun sendiri' });
@@ -232,7 +279,7 @@ router.put('/users/:id', requireAuth, requireRole('admin'), (req, res) => {
   if (target.role === 'admin' && target.aktif && (!jadiAktif || role !== 'admin') && q.countActiveAdmins.get().c <= 1) {
     return res.status(400).json({ error: 'Harus tersisa minimal satu admin aktif' });
   }
-  q.updateUser.run(String(nama).trim(), role, jadiAktif, id);
+  q.updateUser.run(String(nama).trim(), jabatan || null, role, jadiAktif, id);
   q.logAktivitas(req.session.userId, 'USER_UPDATE', 'users', id, `User id ${id}`);
   res.json({ ok: true });
 });

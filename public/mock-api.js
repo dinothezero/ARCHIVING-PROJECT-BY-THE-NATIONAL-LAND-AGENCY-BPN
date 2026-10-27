@@ -118,7 +118,13 @@
         if (!Array.isArray(existing[k])) existing[k] = [];
       });
       existing.arsip.forEach(function (a) { if (!a.kode_qr) a.kode_qr = makeKodeQr(a.nomor_arsip); });
+      var upgraded = false;
+      existing.users.forEach(function (u) {
+        if (!Object.prototype.hasOwnProperty.call(u, 'jabatan')) { u.jabatan = null; upgraded = true; }
+        if (!Object.prototype.hasOwnProperty.call(u, 'foto')) { u.foto = null; upgraded = true; }
+      });
       if (!existing.settings) existing.settings = clone(SETTINGS);
+      if (upgraded) save();
       if (existing.notifikasi && existing.notifikasi.some(function (n) { return n.judul === 'Login berhasil'; })) {
         existing.notifikasi = existing.notifikasi.filter(function (n) { return n.judul !== 'Login berhasil'; });
         save();
@@ -129,9 +135,9 @@
     var hash = await hashPassword('password123');
     DB = {
       users: [
-        { id: 1, username: 'admin', password_hash: hash, nama: 'Administrator', role: 'admin', aktif: 1, last_login: null, created_at: nowIso() },
-        { id: 2, username: 'staff1', password_hash: hash, nama: 'Staff Arsip', role: 'staff', aktif: 1, last_login: null, created_at: nowIso() },
-        { id: 3, username: 'kepala1', password_hash: hash, nama: 'Kepala Bidang', role: 'kepala', aktif: 1, last_login: null, created_at: nowIso() }
+        { id: 1, username: 'admin', password_hash: hash, nama: 'Administrator', jabatan: 'Administrator Sistem', foto: null, role: 'admin', aktif: 1, last_login: null, created_at: nowIso() },
+        { id: 2, username: 'staff1', password_hash: hash, nama: 'Staff Arsip', jabatan: 'Pengelola Arsip', foto: null, role: 'staff', aktif: 1, last_login: null, created_at: nowIso() },
+        { id: 3, username: 'kepala1', password_hash: hash, nama: 'Kepala Bidang', jabatan: 'Kepala Kantor', foto: null, role: 'kepala', aktif: 1, last_login: null, created_at: nowIso() }
       ],
       kategori: KATEGORI.map(function (k, i) { return { id: i + 1, kode: k[0], nama: k[1], deskripsi: k[2], created_at: nowIso() }; }),
       unit: UNIT.map(function (u, i) { return { id: i + 1, kode: u[0], nama: u[1], aktif: 1, created_at: nowIso() }; }),
@@ -302,13 +308,13 @@
       user.last_login = nowIso();
       sessionSet(user.id);
       save();
-      return { user: { id: user.id, username: user.username, nama: user.nama, role: user.role } };
+      return { user: { id: user.id, username: user.username, nama: user.nama, jabatan: user.jabatan || null, foto: user.foto || null, role: user.role } };
     }
     if (path === '/api/logout' && method === 'POST') { sessionClear(); return { ok: true }; }
     if (path === '/api/me' && method === 'GET') {
       requireAuth();
       var me = currentUser();
-      return { user: { id: me.id, username: me.username, nama: me.nama, role: me.role, aktif: me.aktif, last_login: me.last_login, created_at: me.created_at } };
+      return { user: { id: me.id, username: me.username, nama: me.nama, jabatan: me.jabatan || null, foto: me.foto || null, role: me.role, aktif: me.aktif, last_login: me.last_login, created_at: me.created_at } };
     }
     if (path === '/api/ganti-password' && method === 'POST') {
       requireAuth();
@@ -319,6 +325,33 @@
       logAktivitas(cur.id, 'PASSWORD', 'users', cur.id, 'Ganti password sendiri');
       save();
       return { ok: true };
+    }
+    if (path === '/api/akun' && method === 'PUT') {
+      requireAuth();
+      var au = currentUser();
+      var an = String(body.nama || '').trim();
+      if (!an) throw new Error('Nama tampilan wajib diisi');
+      if (an.length > 80) throw new Error('Nama tampilan maksimal 80 karakter');
+      var aj = body.jabatan === undefined ? String(au.jabatan || '') : String(body.jabatan || '').trim();
+      if (aj.length > 80) throw new Error('Jabatan maksimal 80 karakter');
+      if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
+        if (body.foto === null || body.foto === '') au.foto = null;
+        else if (typeof body.foto === 'string' && /^data:image\/(?:png|jpe?g|webp);base64,/.test(body.foto)) {
+          if (body.foto.length > 500 * 1024) throw new Error('Ukuran foto terlalu besar (maksimal ±350 KB)');
+          au.foto = body.foto;
+        } else throw new Error('Format foto tidak didukung');
+      }
+      au.nama = an; au.jabatan = aj || null;
+      if (Object.prototype.hasOwnProperty.call(body, 'role')) {
+        if (au.role !== 'admin') throw new Error('Hanya Administrator yang dapat mengubah role');
+        if (!['admin', 'staff', 'kepala'].includes(body.role)) throw new Error('Role tidak valid');
+        var activeAdmins = DB.users.filter(function (u) { return u.role === 'admin' && u.aktif; }).length;
+        if (body.role !== 'admin' && activeAdmins <= 1) throw new Error('Harus tersisa minimal satu admin aktif');
+        au.role = body.role;
+      }
+      logAktivitas(au.id, 'PROFILE', 'users', au.id, 'Perbarui profil akun');
+      save();
+      return { user: { id: au.id, username: au.username, nama: au.nama, jabatan: au.jabatan || null, foto: au.foto || null, role: au.role, aktif: au.aktif, last_login: au.last_login, created_at: au.created_at } };
     }
 
     // ---- NOTIFIKASI ----
@@ -359,8 +392,9 @@
       var rl = body.role || 'staff';
       if (!un || !nm || !body.password || String(body.password).length < 6) throw new Error('Data tidak lengkap / password minimal 6 karakter');
       if (['admin', 'staff', 'kepala'].indexOf(rl) === -1) throw new Error('Role tidak valid');
+      if (String(body.jabatan || '').trim().length > 80) throw new Error('Jabatan maksimal 80 karakter');
       if (DB.users.some(function (x) { return x.username === un; })) throw new Error('Username sudah dipakai');
-      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
+      var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, jabatan: String(body.jabatan || '').trim() || null, foto: null, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
       DB.users.push(nu);
       logAktivitas(currentUser().id, 'USER_CREATE', 'users', nu.id, 'User: ' + un);
       save();
@@ -373,6 +407,8 @@
       var enama = String(body.nama || '').trim();
       if (!enama) throw new Error('Nama tidak boleh kosong');
       if (['admin', 'staff', 'kepala'].indexOf(body.role) === -1) throw new Error('Role tidak valid');
+      var ejab = Object.prototype.hasOwnProperty.call(body, 'jabatan') ? String(body.jabatan || '').trim() : String(eu.jabatan || '');
+      if (ejab.length > 80) throw new Error('Jabatan maksimal 80 karakter');
       var jadiAktif = body.aktif ? 1 : 0;
       var meId = currentUser().id;
       if (String(eu.id) === String(meId) && (!jadiAktif || body.role !== 'admin')) {
@@ -382,7 +418,7 @@
       if (eu.role === 'admin' && eu.aktif && (!jadiAktif || body.role !== 'admin') && adminAktif <= 1) {
         throw new Error('Harus tersisa minimal satu admin aktif');
       }
-      eu.nama = enama; eu.role = body.role; eu.aktif = jadiAktif;
+      eu.nama = enama; eu.jabatan = ejab || null; eu.role = body.role; eu.aktif = jadiAktif;
       logAktivitas(meId, 'USER_UPDATE', 'users', eu.id, 'User id ' + eu.id);
       save(); return { ok: true };
     }
