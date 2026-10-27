@@ -274,7 +274,7 @@ body.modal-open{overflow:hidden}
 .empty-state{text-align:center;padding:44px 20px;color:var(--muted-2);font-size:14px}
 
 /* ---- TOAST ---- */
-.toast-container{position:fixed;top:84px;right:20px;z-index:400;display:flex;flex-direction:column;gap:9px}
+.toast-container{position:fixed;bottom:22px;right:20px;z-index:400;display:flex;flex-direction:column;gap:9px}
 .toast{display:flex;align-items:center;gap:9px;padding:13px 18px;border-radius:12px;color:#fff;font-size:13.5px;font-weight:500;box-shadow:var(--sh-lg);animation:toastIn .28s cubic-bezier(.22,.8,.3,1);max-width:360px}
 .toast.success{background:linear-gradient(135deg,var(--green-700),var(--green-500))}
 .toast.error{background:linear-gradient(135deg,#a93226,#e74c3c)}
