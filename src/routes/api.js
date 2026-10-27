@@ -191,12 +191,14 @@ router.post('/ganti-password', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Profil sendiri: nama, foto. Role hanya bisa diubah oleh admin dengan validasi.
+// Profil sendiri: nama, jabatan, foto. Role hanya bisa diubah oleh admin dengan validasi.
 router.put('/akun', requireAuth, (req, res) => {
   const body = req.body || {};
   const nama = String(body.nama || '').trim();
   if (!nama) return res.status(400).json({ error: 'Nama tampilan wajib diisi' });
   if (nama.length > 80) return res.status(400).json({ error: 'Nama tampilan maksimal 80 karakter' });
+  const jabatan = body.jabatan === undefined ? String(req.user.jabatan || '') : String(body.jabatan || '').trim();
+  if (jabatan.length > 80) return res.status(400).json({ error: 'Jabatan maksimal 80 karakter' });
   let foto = req.user.foto || null;
   if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
     const f = parseFoto(body.foto);
@@ -219,7 +221,7 @@ router.put('/akun', requireAuth, (req, res) => {
     role = newRole;
   }
 
-  q.updateProfileWithRole.run(nama, foto, role, req.session.userId);
+  q.updateProfileWithRole.run(nama, jabatan || null, foto, role, req.session.userId);
   q.logAktivitas(req.session.userId, 'PROFILE', 'users', req.session.userId, 'Perbarui profil akun');
   req.session.userName = nama;
   req.session.userRole = role;

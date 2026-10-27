@@ -332,6 +332,8 @@
       var an = String(body.nama || '').trim();
       if (!an) throw new Error('Nama tampilan wajib diisi');
       if (an.length > 80) throw new Error('Nama tampilan maksimal 80 karakter');
+      var aj = body.jabatan === undefined ? String(au.jabatan || '') : String(body.jabatan || '').trim();
+      if (aj.length > 80) throw new Error('Jabatan maksimal 80 karakter');
       if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
         if (body.foto === null || body.foto === '') au.foto = null;
         else if (typeof body.foto === 'string' && /^data:image\/(?:png|jpe?g|webp);base64,/.test(body.foto)) {
@@ -339,7 +341,7 @@
           au.foto = body.foto;
         } else throw new Error('Format foto tidak didukung');
       }
-      au.nama = an;
+      au.nama = an; au.jabatan = aj || null;
       if (Object.prototype.hasOwnProperty.call(body, 'role')) {
         if (au.role !== 'admin') throw new Error('Hanya Administrator yang dapat mengubah role');
         if (!['admin', 'staff', 'kepala'].includes(body.role)) throw new Error('Role tidak valid');

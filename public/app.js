@@ -499,16 +499,14 @@ function openAkunSettings(){
   const u = state.currentUser; if(!u) return;
   akunDraft.foto = undefined;
   document.getElementById('akunNama').value = u.nama || '';
+  document.getElementById('akunJabatan').value = u.jabatan || '';
   document.getElementById('akunUsername').value = u.username || '';
   const roleSelect = document.getElementById('akunRole');
   roleSelect.value = u.role || 'staff';
-  const roleHint = document.getElementById('akunRoleHint');
   if(isAdmin()){
     roleSelect.disabled = false;
-    roleHint.style.display = 'none';
   } else {
     roleSelect.disabled = true;
-    roleHint.style.display = 'block';
   }
   document.getElementById('akunFotoInput').value = '';
   renderAkunPreview();
@@ -551,7 +549,7 @@ document.getElementById('akunFotoInput').addEventListener('change', async e=>{
 document.getElementById('btnSimpanAkun').addEventListener('click', async ()=>{
   const nama = document.getElementById('akunNama').value.trim();
   if(!nama){ toast('Nama tampilan wajib diisi','error'); return; }
-  const body = { nama };
+  const body = { nama, jabatan: document.getElementById('akunJabatan').value.trim() };
   if(akunDraft.foto !== undefined) body.foto = akunDraft.foto;
   if(isAdmin()){
     const newRole = document.getElementById('akunRole').value;
