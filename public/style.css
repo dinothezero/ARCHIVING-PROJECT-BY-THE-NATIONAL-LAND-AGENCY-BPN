@@ -110,6 +110,13 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .user-avatar.av-admin{background:linear-gradient(135deg,#8a6a12,var(--gold-bright));box-shadow:0 3px 10px rgba(189,146,20,.32)}
 .user-avatar.av-kepala{background:linear-gradient(135deg,var(--navy),#2b6f9a);box-shadow:0 3px 10px rgba(22,64,95,.32)}
 .user-avatar.av-staff{background:linear-gradient(135deg,var(--green-700),var(--green-500))}
+.user-avatar.has-foto{padding:0;overflow:hidden;background:#e8eee9}
+.user-avatar img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
+.user-cell{display:flex;align-items:center;gap:10px}
+.user-cell .user-avatar{width:34px;height:34px;font-size:13px;box-shadow:none}
+.user-cell-meta{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.user-cell-meta strong{font-size:13.5px;font-weight:600;color:var(--ink)}
+.user-cell-meta span{font-size:11.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .topbar-user-text{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 .topbar-user-text strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
 .role-chip{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.35px;text-transform:uppercase;padding:1px 8px;border-radius:20px;border:1px solid transparent;line-height:1.6}
@@ -277,7 +284,18 @@ body.modal-open{overflow:hidden}
 .mtab:hover{color:var(--green-700)}
 .mtab.active{background:#fff;color:var(--green-800);box-shadow:var(--sh-sm)}
 .reset-user{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line-2);border-radius:13px;background:linear-gradient(135deg,var(--green-50),#fff);margin-bottom:18px}
-.reset-avatar{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--green-700),var(--green-500));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;box-shadow:0 5px 14px -8px rgba(23,106,84,.7)}
+.reset-avatar{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--green-700),var(--green-500));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0;box-shadow:0 5px 14px -8px rgba(23,106,84,.7);overflow:hidden}
+.reset-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* ---- PENGATURAN AKUN ---- */
+.akun-photo-section{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px;background:var(--green-50);border-radius:12px;margin-bottom:20px}
+.akun-avatar{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden;background:linear-gradient(135deg,var(--green-700),var(--green-500));box-shadow:0 8px 20px -10px rgba(6,37,29,.6)}
+.akun-avatar.av-admin{background:linear-gradient(135deg,#8a6a12,var(--gold-bright))}
+.akun-avatar.av-kepala{background:linear-gradient(135deg,var(--navy),#2b6f9a)}
+.akun-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.akun-photo-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.akun-fields{display:flex;flex-direction:column;gap:14px}
+.akun-fields .field{margin-bottom:0}
 .reset-user-meta{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
 .reset-user-meta strong{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reset-user-meta span{font-size:12px;color:var(--muted)}
