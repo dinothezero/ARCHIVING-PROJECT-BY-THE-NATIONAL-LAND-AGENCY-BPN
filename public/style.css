@@ -90,7 +90,8 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .app-topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;padding:0 24px;height:72px;background:rgba(255,255,255,.86);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border-bottom:none;box-shadow:0 1px 0 rgba(15,45,34,.05)}
 .app-topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;pointer-events:none;z-index:2;background:linear-gradient(100deg,var(--gold-bright) 0%,#f7dd96 15%,var(--green-700) 47%,var(--green-600) 72%,var(--green-500) 100%);background-size:220% 100%;animation:liquidStripe 11s ease-in-out infinite;box-shadow:0 1px 8px -2px rgba(23,106,84,.35)}
 .app-topbar::before{content:"";position:absolute;left:0;right:0;bottom:2px;height:1px;pointer-events:none;z-index:3;background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent)}
-.topbar-menu{display:none}
+.topbar-menu{display:flex;align-items:center;justify-content:center;gap:0;padding:8px;border-radius:10px;transition:background .15s,color .15s}
+.topbar-menu:hover{background:var(--green-50)}
 .topbar-menu .ic-close{display:none}
 .topbar-menu.is-open{background:var(--green-100);color:var(--green-700)}
 .topbar-menu.is-open .ic-menu{display:none}
