@@ -134,7 +134,8 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .app-body{display:flex;flex:1}
 
 /* ---- SIDEBAR ---- */
-.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--green-900);color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;position:sticky;top:72px;height:calc(100vh - 72px)}
+.sidebar{width:var(--sidebar-w);flex-shrink:0;background:var(--green-900);color:#fff;display:flex;flex-direction:column;padding:22px 14px 18px;position:sticky;top:72px;height:calc(100vh - 72px);transition:margin-left .25s cubic-bezier(.22,.8,.3,1),transform .25s cubic-bezier(.22,.8,.3,1)}
+.sidebar.open{margin-left:calc(var(--sidebar-w) * -1)}
 .nav-section-label{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(255,255,255,.4);padding:0 12px;margin-bottom:12px}
 .sidebar-nav{display:flex;flex-direction:column;gap:4px;flex:1}
 .nav-item{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:11px;color:rgba(255,255,255,.72);font-size:14px;font-weight:500;transition:background .15s,color .15s,transform .12s}

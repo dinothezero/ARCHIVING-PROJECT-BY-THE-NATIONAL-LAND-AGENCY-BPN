@@ -264,15 +264,16 @@ function setSidebarOpen(open) {
   const bd = document.getElementById('sidebarBackdrop');
   const btn = document.getElementById('menuToggle');
   if (!sb) return;
-  const show = !!open && isMobileNav();
+  const show = !!open;
+  const mobile = isMobileNav();
   sb.classList.toggle('open', show);
-  if (bd) bd.classList.toggle('show', show);
+  if (bd) bd.classList.toggle('show', show && mobile);
   if (btn) {
     btn.classList.toggle('is-open', show);
     btn.setAttribute('aria-expanded', show ? 'true' : 'false');
     btn.setAttribute('aria-label', show ? 'Tutup menu navigasi' : 'Buka menu navigasi');
   }
-  document.body.classList.toggle('sidebar-open', show);
+  document.body.classList.toggle('sidebar-open', show && mobile);
 }
 window.__setSidebarOpen = setSidebarOpen;
 
