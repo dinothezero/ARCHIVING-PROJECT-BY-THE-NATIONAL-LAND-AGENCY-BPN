@@ -348,7 +348,7 @@ function makeKodeQr(nomorArsip) {
   return `${nomorArsip}|a&s|${crypto.randomBytes(4).toString('hex')}`;
 }
 
-router.post('/arsip', requireAuth, (req, res) => {
+router.post('/arsip', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   if (!String(b.judul || '').trim()) return res.status(400).json({ error: 'Judul arsip wajib diisi' });
   if (!validDate(b.tanggal_arsip)) return res.status(400).json({ error: 'Tanggal arsip wajib diisi dengan format YYYY-MM-DD' });
@@ -364,7 +364,7 @@ router.post('/arsip', requireAuth, (req, res) => {
   res.json({ id: r.lastInsertRowid, nomor_arsip: nomor, kode_qr: kodeQr });
 });
 
-router.put('/arsip/:id', requireAuth, (req, res) => {
+router.put('/arsip/:id', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   const lama = q.getArsipById.get(req.params.id);
   if (!lama) return res.status(404).json({ error: 'Arsip tidak ditemukan' });
@@ -478,7 +478,7 @@ router.get('/peminjaman', requireAuth, (req, res) => {
   for (const o of overdue) q.markOverdue.run(o.id);
   res.json(q.getPeminjamanList.all());
 });
-router.post('/peminjaman', requireAuth, (req, res) => {
+router.post('/peminjaman', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   const arsip = q.getArsipById.get(b.arsip_id);
   if (!arsip || arsip.deleted_at) return res.status(400).json({ error: 'Arsip yang dipinjam tidak ditemukan' });
@@ -495,7 +495,7 @@ router.post('/peminjaman', requireAuth, (req, res) => {
   q.logAktivitas(req.session.userId, 'PINJAM', 'arsip', b.arsip_id, `Peminjaman: ${b.peminjam} (${arsip.nomor_arsip})`);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/peminjaman/:id', requireAuth, (req, res) => {
+router.put('/peminjaman/:id', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   const p = q.getPeminjamanById.get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Data peminjaman tidak ditemukan' });
@@ -524,7 +524,7 @@ router.delete('/peminjaman/:id', requireAuth, requireRole('admin', 'staff'), (re
 });
 
 /* ============ LAMPIRAN ============ */
-router.post('/arsip/:id/lampiran', requireAuth, runUpload(upload.array('files')), (req, res) => {
+router.post('/arsip/:id/lampiran', requireAuth, requireRole('admin', 'staff'), runUpload(upload.array('files')), (req, res) => {
   const arsip = q.getArsipById.get(req.params.id);
   if (!arsip) {
     if (req.files) req.files.forEach(f => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); });
@@ -768,7 +768,7 @@ router.get('/buku-agenda', requireAuth, (req, res) => {
     tahunTersedia: [...new Set(q.getBukuAgendaList.all(jenis).map(r => Number(r.tahun)))].sort((a, b) => b - a)
   });
 });
-router.post('/buku-agenda', requireAuth, (req, res) => {
+router.post('/buku-agenda', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   const jenis = b.jenis === 'keluar' ? 'keluar' : 'masuk';
   const tahun = parseInt(b.tahun) || new Date().getFullYear();
@@ -781,7 +781,7 @@ router.post('/buku-agenda', requireAuth, (req, res) => {
   q.logAktivitas(req.session.userId, 'AGENDA', 'buku_agenda', r.lastInsertRowid, `Agenda ${jenis} no ${no}/${tahun}: ${b.perihal}`);
   res.json({ id: r.lastInsertRowid, nomor_urut: no });
 });
-router.put('/buku-agenda/:id', requireAuth, (req, res) => {
+router.put('/buku-agenda/:id', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   if (!q.getBukuAgendaById.get(req.params.id)) return res.status(404).json({ error: 'Agenda tidak ditemukan' });
   if (!validDate(b.tanggal)) return res.status(400).json({ error: 'Tanggal agenda wajib diisi' });
@@ -798,7 +798,7 @@ router.get('/agenda', requireAuth, (req, res) => {
   const bulan = req.query.bulan || monthLocal();
   res.json({ rows: q.getAgendaBulan.all(bulan), bulan });
 });
-router.post('/agenda', requireAuth, (req, res) => {
+router.post('/agenda', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   if (!String(b.judul || '').trim()) return res.status(400).json({ error: 'Judul kegiatan wajib diisi' });
   if (!validDate(b.tanggal)) return res.status(400).json({ error: 'Tanggal kegiatan wajib diisi' });
@@ -807,7 +807,7 @@ router.post('/agenda', requireAuth, (req, res) => {
   q.logAktivitas(req.session.userId, 'AGENDA', 'agenda_kegiatan', r.lastInsertRowid, `Agenda: ${b.judul}`);
   res.json({ id: r.lastInsertRowid });
 });
-router.put('/agenda/:id', requireAuth, (req, res) => {
+router.put('/agenda/:id', requireAuth, requireRole('admin', 'staff'), (req, res) => {
   const b = req.body || {};
   if (!q.getAgendaById.get(req.params.id)) return res.status(404).json({ error: 'Agenda tidak ditemukan' });
   if (!String(b.judul || '').trim()) return res.status(400).json({ error: 'Judul kegiatan wajib diisi' });

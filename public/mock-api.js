@@ -508,7 +508,7 @@
       return { data: rows.slice(start, start + limit).map(joinArsip), total: total, page: page, limit: limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
     }
     if (path === '/api/arsip' && method === 'POST') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var judulBaru = String(body.judul || '').trim();
       if (!judulBaru) throw new Error('Judul arsip wajib diisi');
       if (!validDate(body.tanggal_arsip)) throw new Error('Tanggal arsip wajib diisi dengan format YYYY-MM-DD');
@@ -558,7 +558,7 @@
       return out;
     }
     if (mArsipId && method === 'PUT') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var ua = byId(DB.arsip, mArsipId[1]); if (!ua) throw new Error('Arsip tidak ditemukan');
       if (!String(body.judul || '').trim()) throw new Error('Judul arsip wajib diisi');
       if (!validDate(body.tanggal_arsip)) throw new Error('Tanggal arsip wajib diisi dengan format YYYY-MM-DD');
@@ -659,7 +659,7 @@
         .sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; }).map(joinPeminjaman);
     }
     if (path === '/api/peminjaman' && method === 'POST') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var par = byId(DB.arsip, body.arsip_id);
       if (!par || par.deleted_at) throw new Error('Arsip yang dipinjam tidak ditemukan');
       if (par.status === 'hilang' || par.status === 'rusak') throw new Error('Arsip hilang/rusak tidak dapat dipinjam');
@@ -682,7 +682,7 @@
       save(); return { id: p0.id };
     }
     if (mPin && method === 'PUT') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var up = byId(DB.peminjaman, mPin[1]); if (!up) throw new Error('Data peminjaman tidak ditemukan');
       var pstatus = body.status || up.status;
       if (['dipinjam', 'dikembalikan', 'terlambat'].indexOf(pstatus) === -1) throw new Error('Status peminjaman tidak valid');
@@ -714,7 +714,7 @@
     }
 
     // ---- LAMPIRAN ----
-    if (mLamp && method === 'POST') { requireAuth(); throw new Error('Gunakan window.__mockUploadLampiran'); }
+    if (mLamp && method === 'POST') { requireRole('admin', 'staff'); throw new Error('Gunakan window.__mockUploadLampiran'); }
     var mLampId = path.match(/^\/api\/lampiran\/(\d+)$/);
     if (mLampId && method === 'DELETE') {
       requireRole('admin', 'staff');
@@ -797,7 +797,7 @@
       return { rows: rows2, jenis: jenis, tahun: tahun, jumlahTahunIni: jml, tahunTersedia: tahunTersedia };
     }
     if (path === '/api/buku-agenda' && method === 'POST') {
-      requireAuth();
+      requireRole('admin', 'staff');
       if (!validDate(body.tanggal)) throw new Error('Tanggal agenda wajib diisi');
       if (!String(body.perihal || '').trim()) throw new Error('Perihal wajib diisi');
       if (body.arsip_id && !byId(DB.arsip, body.arsip_id)) throw new Error('Arsip terkait tidak ditemukan');
@@ -811,7 +811,7 @@
       save(); return { id: bg.id, nomor_urut: no };
     }
     if (mBg && method === 'PUT') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var ubg = byId(DB.bukuAgenda, mBg[1]); if (!ubg) throw new Error('Agenda tidak ditemukan');
       if (!validDate(body.tanggal)) throw new Error('Tanggal agenda wajib diisi');
       if (!String(body.perihal || '').trim()) throw new Error('Perihal wajib diisi');
@@ -831,7 +831,7 @@
       return { rows: arows, bulan: bulan };
     }
     if (path === '/api/agenda' && method === 'POST') {
-      requireAuth();
+      requireRole('admin', 'staff');
       if (!String(body.judul || '').trim()) throw new Error('Judul kegiatan wajib diisi');
       if (!validDate(body.tanggal)) throw new Error('Tanggal kegiatan wajib diisi');
       var ag = { id: nextId(DB.agenda), judul: String(body.judul).trim(), tanggal: body.tanggal, jam_mulai: body.jam_mulai || null, jam_selesai: body.jam_selesai || null, lokasi: body.lokasi || null, tipe: body.tipe || 'kegiatan', keterangan: body.keterangan || null, created_by: currentUser().id, created_at: nowIso() };
@@ -840,7 +840,7 @@
       save(); return { id: ag.id };
     }
     if (mAg && method === 'PUT') {
-      requireAuth();
+      requireRole('admin', 'staff');
       var uag = byId(DB.agenda, mAg[1]); if (!uag) throw new Error('Agenda tidak ditemukan');
       if (!String(body.judul || '').trim()) throw new Error('Judul kegiatan wajib diisi');
       if (!validDate(body.tanggal)) throw new Error('Tanggal kegiatan wajib diisi');
@@ -975,7 +975,7 @@
 
   window.__mockUploadLampiran = async function (arsipId, files) {
     await ensureReady();
-    requireAuth();
+    requireRole('admin', 'staff');
     if (!byId(DB.arsip, arsipId)) throw new Error('Arsip tidak ditemukan');
     if (!files || !files.length) throw new Error('Tidak ada file yang diunggah');
     var out = [];

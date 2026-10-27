@@ -191,17 +191,29 @@ function getRecentArsip() {
   catch (e) { return []; }
 }
 
-/* ============ NAVIGATION ============ */
-function isAdmin(){ return state.currentUser && state.currentUser.role === 'admin'; }
-function canManage(){ return state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'staff'); }
-function canAccessPage(page){
-  if (page === 'users' || page === 'log') return isAdmin();
-  if (page === 'sampah') return canManage();
+/* ============ ROLE & NAVIGATION ============ */
+const ROLE_META = {
+  admin: { label: 'Administrator', chip: 'role-admin', avatar: 'av-admin', summary: 'Akses penuh ke seluruh sistem' },
+  staff: { label: 'Staf Arsip', chip: 'role-staff', avatar: 'av-staff', summary: 'Operasional arsip sehari-hari' },
+  kepala: { label: 'Kepala Kantor', chip: 'role-kepala', avatar: 'av-kepala', summary: 'Pengawasan dan disposisi' }
+};
+const ROLE_PERM = {
+  admin: 'Akses penuh: semua menu, pengguna, pengaturan kantor, log aktivitas, backup, dan hapus permanen.',
+  staff: 'Operasional: kelola arsip, agenda, disposisi, peminjaman, laporan, dan data master. Tanpa pengguna & pengaturan.',
+  kepala: 'Pengawasan: lihat arsip, agenda, laporan, dan peminjaman; buat serta tindak lanjuti disposisi tanpa mengubah arsip.'
+};
+function roleMeta(role) { return ROLE_META[role] || ROLE_META.staff; }
+function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
+function isKepala() { return state.currentUser && state.currentUser.role === 'kepala'; }
+function canManage() { return state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'staff'); }
+function canAccessPage(page) {
+  if (page === 'users' || page === 'log' || page === 'profil') return isAdmin();
+  if (page === 'sampah' || page === 'master') return canManage();
   return true;
 }
-function applyRoleVisibility(){
+function applyRoleVisibility() {
   document.querySelectorAll('.nav-admin').forEach(n => { n.style.display = isAdmin() ? '' : 'none'; });
-  document.querySelectorAll('.nav-item[data-page="sampah"]').forEach(n => { n.style.display = canManage() ? '' : 'none'; });
+  document.querySelectorAll('.nav-manage, .nav-item[data-page="sampah"]').forEach(n => { n.style.display = canManage() ? '' : 'none'; });
 }
 async function showPage(page) {
   if (!canAccessPage(page)) { page = 'dashboard'; }
@@ -217,21 +229,22 @@ async function showPage(page) {
   actionEl.innerHTML = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
+  const manage = canManage();
   if (page === 'dashboard') { loadDashboard(); }
   else if (page === 'arsip') {
-    actionEl.innerHTML = `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button>` + (canManage()?`<button id="btnImportArsip" class="btn btn-gold">Import CSV</button>`:'');
-    document.getElementById('btnTambahArsip').onclick = openTambahArsip;
-    const ib=document.getElementById('btnImportArsip'); if(ib) ib.onclick=openImportModal;
+    actionEl.innerHTML = (manage ? `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button><button id="btnImportArsip" class="btn btn-gold">Import CSV</button>` : '');
+    const ab = document.getElementById('btnTambahArsip'); if (ab) ab.onclick = openTambahArsip;
+    const ib = document.getElementById('btnImportArsip'); if (ib) ib.onclick = openImportModal;
     await ensureDropdowns(); if (state.currentPage !== 'arsip') return;
     buildArsipLayout(); loadArsip();
   }
-  else if (page === 'buku-agenda') { actionEl.innerHTML = `<button id="btnTambahBg" class="btn btn-primary">${ICONS.plus} Catat Agenda</button>`; document.getElementById('btnTambahBg').onclick = ()=>openBukuAgendaModal(); buildBukuAgendaLayout(); loadBukuAgenda(); }
-  else if (page === 'disposisi') { actionEl.innerHTML = `<button id="btnTambahDisp" class="btn btn-primary">${ICONS.plus} Buat Disposisi</button>`; document.getElementById('btnTambahDisp').onclick = ()=>openDisposisiModal(); buildDisposisiLayout(); loadDisposisi(); }
-  else if (page === 'peminjaman') { actionEl.innerHTML = `<button id="btnTambahPinjam" class="btn btn-primary">${ICONS.plus} Catat Peminjaman</button>`; document.getElementById('btnTambahPinjam').onclick = ()=>openPeminjamanModal(); buildPeminjamanLayout(); loadPeminjaman(); }
-  else if (page === 'kalender') { actionEl.innerHTML = `<button id="btnTambahKegiatan" class="btn btn-primary">${ICONS.plus} Tambah Kegiatan</button>`; document.getElementById('btnTambahKegiatan').onclick = ()=>openKegiatanModal(); buildKalenderLayout(); loadKalenderPage(); }
-  else if (page === 'kategori') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b=document.getElementById('btnTambahKategori'); if(b)b.onclick=openTambahKategori; buildKategoriLayout(); loadKategoriPage(); }
+  else if (page === 'buku-agenda') { if (manage) actionEl.innerHTML = `<button id="btnTambahBg" class="btn btn-primary">${ICONS.plus} Catat Agenda</button>`; const b = document.getElementById('btnTambahBg'); if (b) b.onclick = () => openBukuAgendaModal(); buildBukuAgendaLayout(); loadBukuAgenda(); }
+  else if (page === 'disposisi') { actionEl.innerHTML = `<button id="btnTambahDisp" class="btn btn-primary">${ICONS.plus} Buat Disposisi</button>`; document.getElementById('btnTambahDisp').onclick = () => openDisposisiModal(); buildDisposisiLayout(); loadDisposisi(); }
+  else if (page === 'peminjaman') { if (manage) actionEl.innerHTML = `<button id="btnTambahPinjam" class="btn btn-primary">${ICONS.plus} Catat Peminjaman</button>`; const b = document.getElementById('btnTambahPinjam'); if (b) b.onclick = () => openPeminjamanModal(); buildPeminjamanLayout(); loadPeminjaman(); }
+  else if (page === 'kalender') { if (manage) actionEl.innerHTML = `<button id="btnTambahKegiatan" class="btn btn-primary">${ICONS.plus} Tambah Kegiatan</button>`; const b = document.getElementById('btnTambahKegiatan'); if (b) b.onclick = () => openKegiatanModal(); buildKalenderLayout(); loadKalenderPage(); }
+  else if (page === 'kategori') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b = document.getElementById('btnTambahKategori'); if (b) b.onclick = openTambahKategori; buildKategoriLayout(); loadKategoriPage(); }
   else if (page === 'master') { buildMasterLayout(); loadMaster(); }
-  else if (page === 'users') { buildUsersLayout(); if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b=document.getElementById('btnTambahUser'); if(b)b.onclick=openTambahUser; loadUsersPage(); }
+  else if (page === 'users') { buildUsersLayout(); if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b = document.getElementById('btnTambahUser'); if (b) b.onclick = openTambahUser; loadUsersPage(); }
   else if (page === 'laporan') { await ensureDropdowns(); if (state.currentPage !== 'laporan') return; loadLaporanPage(); }
   else if (page === 'sampah') { buildSampahLayout(); loadSampah(); }
   else if (page === 'log') { buildLogLayout(); loadLogPage(); }
@@ -240,9 +253,28 @@ async function showPage(page) {
   target.style.display = 'block';
   void target.offsetWidth;
   target.classList.add('active', 'entering');
-  document.getElementById('sidebar').classList.remove('open');
+  setSidebarOpen(false);
   applyRoleVisibility();
 }
+
+/* ---- Sidebar (mobile drawer) ---- */
+function isMobileNav() { return window.matchMedia('(max-width:900px)').matches; }
+function setSidebarOpen(open) {
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  const btn = document.getElementById('menuToggle');
+  if (!sb) return;
+  const show = !!open && isMobileNav();
+  sb.classList.toggle('open', show);
+  if (bd) bd.classList.toggle('show', show);
+  if (btn) {
+    btn.classList.toggle('is-open', show);
+    btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+    btn.setAttribute('aria-label', show ? 'Tutup menu navigasi' : 'Buka menu navigasi');
+  }
+  document.body.classList.toggle('sidebar-open', show);
+}
+window.__setSidebarOpen = setSidebarOpen;
 
 /* ============ AUTH ============ */
 function showLogin(silent){
@@ -254,6 +286,7 @@ function showLogin(silent){
   closeUserDropdown(); closeNotifDropdown();
   document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; m.classList.remove('closing','open'); });
   document.body.classList.remove('modal-open', 'print-detail');
+  setSidebarOpen(false);
   const vp = document.getElementById('verifyPage'); if (vp) vp.style.display = 'none';
   document.getElementById('loginPage').style.display = 'grid';
   document.getElementById('appPage').style.display = 'none';
@@ -264,12 +297,17 @@ function showApp(user){
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('appPage').style.display = 'flex';
   state.currentUser = user;
+  const meta = roleMeta(user.role);
   document.getElementById('userName').textContent = user.nama;
-  document.getElementById('userAvatar').textContent = (user.nama||'?').charAt(0).toUpperCase();
-  const roleNames={admin:'Administrator',staff:'Staf',kepala:'Kepala'};
-  document.getElementById('userRole').textContent = roleNames[user.role]||user.role;
+  const av = document.getElementById('userAvatar');
+  av.textContent = (user.nama||'?').charAt(0).toUpperCase();
+  av.className = 'user-avatar ' + meta.avatar;
+  const roleChip = document.getElementById('userRole');
+  roleChip.textContent = meta.label;
+  roleChip.className = 'role-chip ' + meta.chip;
   document.getElementById('udName').textContent = user.nama;
-  document.getElementById('udRole').textContent = roleNames[user.role]||user.role;
+  document.getElementById('udRole').textContent = meta.label + ' · ' + meta.summary;
+  const perm = document.getElementById('udPerm'); if (perm) perm.textContent = ROLE_PERM[user.role] || '';
   applyRoleVisibility();
   loadNotifikasi();
   clearInterval(state.notifTimer);
@@ -352,10 +390,20 @@ if(forgotBtn) forgotBtn.addEventListener('click',()=>toast('Hubungi Administrato
 wirePassToggles();
 loadRememberedUser();
 document.querySelectorAll('.nav-item').forEach(item=>item.addEventListener('click',e=>{ e.preventDefault(); showPage(item.dataset.page); }));
-document.getElementById('menuToggle').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
+document.getElementById('menuToggle').addEventListener('click', e=>{
+  e.stopPropagation();
+  setSidebarOpen(!document.getElementById('sidebar').classList.contains('open'));
+});
+const sidebarBackdropEl=document.getElementById('sidebarBackdrop');
+if(sidebarBackdropEl) sidebarBackdropEl.addEventListener('click',()=>setSidebarOpen(false));
+window.addEventListener('resize',()=>{ if(!isMobileNav()) setSidebarOpen(false); });
 
 /* ---- User menu & dropdown ---- */
 document.getElementById('userMenu').addEventListener('click', e=>{ e.stopPropagation(); toggleUserDropdown(); });
+document.getElementById('userMenu').addEventListener('keydown', e=>{
+  if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); toggleUserDropdown(); }
+  else if(e.key==='Escape'){ closeUserDropdown(); }
+});
 document.getElementById('btnGantiPass').addEventListener('click',()=>{ closeUserDropdown(); openGantiPass(); });
 document.addEventListener('click',()=>{ closeUserDropdown(); closeNotifDropdown(); });
 function setDropdown(el, open){
@@ -367,8 +415,12 @@ function toggleUserDropdown(){
   const d=document.getElementById('userDropdown'); if(!d) return;
   const open=!d.classList.contains('open');
   closeNotifDropdown(); setDropdown(d, open);
+  const um=document.getElementById('userMenu'); if(um) um.setAttribute('aria-expanded', open?'true':'false');
 }
-function closeUserDropdown(){ setDropdown(document.getElementById('userDropdown'), false); }
+function closeUserDropdown(){
+  setDropdown(document.getElementById('userDropdown'), false);
+  const um=document.getElementById('userMenu'); if(um) um.setAttribute('aria-expanded','false');
+}
 function passwordScore(v){
   if(!v) return 0;
   let s=0;
@@ -484,6 +536,7 @@ document.addEventListener('keydown', e=>{
   const open=[...document.querySelectorAll('.modal')].filter(m=>m.style.display!=='none' && !m.classList.contains('closing'));
   if(open.length){ closeModal(open[open.length-1].id); return; }
   closeUserDropdown(); closeNotifDropdown();
+  setSidebarOpen(false);
 });
 
 /* ============ MASTER DATA DROPDOWNS ============ */
@@ -614,7 +667,7 @@ async function loadDashboard(){
         <div class="dh-date">${namaHariTanggal(new Date())}</div>
         <div class="dh-msg" id="dhMsg">Ringkasan arsip, disposisi, peminjaman, dan agenda kegiatan kantor Anda hari ini.</div>
         <div class="hero-actions">
-          <button type="button" class="hero-btn hero-btn-gold" onclick="openTambahArsip()">${ICONS.plus}<span>Arsip Baru</span></button>
+          ${canManage()?`<button type="button" class="hero-btn hero-btn-gold" onclick="openTambahArsip()">${ICONS.plus}<span>Arsip Baru</span></button>`:''}
           <button type="button" class="hero-btn" onclick="showPage('laporan')">Lihat Laporan</button>
         </div>
       </div>
@@ -782,7 +835,7 @@ async function loadArsip(){
       tb.innerHTML=rows.map(a=>{ const sel=state.selectedArsip.has(a.id);
         return `<tr class="${sel?'row-selected':''}"><td class="check-col"><input type="checkbox" class="row-check" data-id="${a.id}" ${sel?'checked':''} aria-label="Pilih ${esc(a.nomor_arsip)}"></td><td>${i++}</td><td class="mono strong">${esc(a.nomor_arsip)}<button type="button" class="copy-btn" data-copy="${esc(a.nomor_arsip)}" title="Salin nomor arsip">${ICONS.copy}</button></td><td><span class="tag">${esc(a.kategori_kode)}</span></td><td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${esc(a.judul)}">${esc(a.judul)}</td><td>${formatDate(a.tanggal_arsip)}</td><td>${esc(a.lokasi_kode||'-')}</td><td><span class="badge badge-${a.status}">${STATUS_LABEL[a.status]||a.status}</span></td><td class="th-actions"><div class="cell-actions">
         <button class="icon-btn" onclick="openDetail(${a.id})" title="Detail">${ICONS.eye}</button>
-        <button class="icon-btn" onclick="editArsip(${a.id})" title="Edit">${ICONS.edit}</button>
+        ${canDel?`<button class="icon-btn" onclick="editArsip(${a.id})" title="Edit">${ICONS.edit}</button>`:''}
         <button class="icon-btn" onclick="showQr(${a.id})" title="QR">${ICONS.qr}</button>
         <button class="icon-btn" onclick="openLampiran(${a.id})" title="Lampiran">${ICONS.clip}</button>
         ${canDel?`<button class="icon-btn danger" onclick="delArsip(${a.id})" title="Hapus">${ICONS.trash}</button>`:''}
@@ -973,6 +1026,7 @@ async function checkDuplicateNomor(){
 }
 
 function openTambahArsip(){
+  if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat menambah arsip','error'); return; }
   document.getElementById('formArsip').reset();
   document.getElementById('arsipId').value='';
   document.getElementById('arsipTanggalArsip').value=todayLocal();
@@ -981,7 +1035,7 @@ function openTambahArsip(){
   updateDraftBanner();
   openModal('modalArsip');
 }
-window.editArsip=async function(id){ try{ const d=await api('/api/arsip/'+id);
+window.editArsip=async function(id){ if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat mengubah arsip','error'); return; } try{ const d=await api('/api/arsip/'+id);
   document.getElementById('arsipId').value=d.id; document.getElementById('arsipKategori').value=d.kategori_id; document.getElementById('arsipStatus').value=d.status;
   document.getElementById('arsipJudul').value=d.judul; document.getElementById('arsipNomorSurat').value=d.nomor_surat||''; document.getElementById('arsipTanggalSurat').value=d.tanggal_surat||'';
   document.getElementById('arsipTanggalArsip').value=d.tanggal_arsip||''; document.getElementById('arsipPengirim').value=d.pengirim||''; document.getElementById('arsipInstansi').value=d.instansi_id||'';
@@ -1004,7 +1058,7 @@ document.getElementById('btnSimpanArsip').addEventListener('click', async ()=>{
     const nw=document.getElementById('arsipNomorWarn'); if(nw){ nw.style.display='none'; nw.textContent=''; }
     state.arsipOptions=null; closeModal('modalArsip'); loadArsip(); }catch(e){ toast(e.message,'error'); }
 });
-window.delArsip=async function(id){ if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); state.arsipOptions=null; state.selectedArsip.delete(id); loadArsip(); }catch(e){ toast(e.message,'error'); } };
+window.delArsip=async function(id){ if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat menghapus arsip','error'); return; } if(!confirm('Pindahkan arsip ini ke tempat sampah?'))return; try{ await api('/api/arsip/'+id,{method:'DELETE'}); toast('Dipindah ke tempat sampah','success'); state.arsipOptions=null; state.selectedArsip.delete(id); loadArsip(); }catch(e){ toast(e.message,'error'); } };
 
 /* ---- DETAIL ---- */
 window.openDetail=async function(id){
@@ -1036,7 +1090,7 @@ window.openDetail=async function(id){
       <button class="btn btn-ghost" type="button" id="btnCopyVerify">${ICONS.copy} Salin Tautan Verifikasi</button>
       <button class="btn btn-ghost" onclick="openLampiran(${d.id})">${ICONS.clip} Lampiran</button>
       <button class="btn btn-ghost" onclick="openDisposisiModal(${d.id})">${ICONS.plus} Disposisi</button>
-      <button class="btn btn-ghost" onclick="openPeminjamanModal(${d.id})">${ICONS.plus} Pinjam</button>
+      ${can?`<button class="btn btn-ghost" onclick="openPeminjamanModal(${d.id})">${ICONS.plus} Pinjam</button>`:''}
       <button class="btn btn-ghost" onclick="printDetail()">Cetak</button>
     </div>
     <div class="detail-section"><h4>Disposisi</h4>${disp}</div>
@@ -1109,12 +1163,13 @@ function buildPeminjamanLayout(){ const sec=document.getElementById('page-peminj
   sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Arsip</th><th>Peminjam</th><th>Unit</th><th>Pinjam</th><th>Jatuh Tempo</th><th>Kembali</th><th>Status</th><th class="th-actions">Aksi</th></tr></thead><tbody id="peminjamanBody"><tr><td colspan="8" class="empty-state">Memuat...</td></tr></tbody></table></div></div>`; }
 async function loadPeminjaman(){ try{ const list=(await api('/api/peminjaman'))||[]; const tb=document.getElementById('peminjamanBody'); if(!tb) return; if(!list.length){tb.innerHTML='<tr><td colspan="8" class="empty-state">Belum ada peminjaman</td></tr>';return;}
   tb.innerHTML=list.map(x=>`<tr><td><span class="mono strong">${esc(x.nomor_arsip)}</span><div style="font-size:12px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis" title="${esc(x.judul||'')}">${esc(x.judul||'')}</div></td><td>${esc(x.peminjam)}</td><td>${esc(x.unit_nama||x.unit_peminjam||'-')}</td><td>${formatDate(x.tanggal_pinjam)}</td><td>${formatDate(x.tanggal_jatuh_tempo)}</td><td>${x.tanggal_kembali?formatDate(x.tanggal_kembali):'-'}</td><td><span class="badge badge-${x.status}">${STATUS_LABEL[x.status]||esc(x.status)}</span></td><td class="th-actions"><div class="cell-actions">
-    ${x.status==='dipinjam'||x.status==='terlambat'?`<button class="btn btn-sm btn-success" onclick="kembaliPinjam(${x.id})">Kembalikan</button>`:''}
+    ${(x.status==='dipinjam'||x.status==='terlambat')&&canManage()?`<button class="btn btn-sm btn-success" onclick="kembaliPinjam(${x.id})">Kembalikan</button>`:''}
     ${canManage()?`<button class="icon-btn danger" onclick="delPinjam(${x.id})" title="Hapus">${ICONS.trash}</button>`:''}
   </div></td></tr>`).join(''); }catch(e){ toast(e.message,'error'); } }
 window.delPinjam=async function(id){ if(!confirm('Hapus catatan peminjaman?'))return; try{ await api('/api/peminjaman/'+id,{method:'DELETE'}); toast('Dihapus','success'); loadPeminjaman(); refreshArsipIfBuilt(); if(state.detailId) openDetail(state.detailId); }catch(e){ toast(e.message,'error'); } };
 window.kembaliPinjam=async function(id){ if(!confirm('Tandai arsip telah dikembalikan?'))return; try{ await api('/api/peminjaman/'+id,{method:'PUT',body:{status:'dikembalikan'}}); toast('Arsip dikembalikan','success'); loadPeminjaman(); refreshArsipIfBuilt(); if(state.detailId) openDetail(state.detailId); }catch(e){ toast(e.message,'error'); } };
 async function openPeminjamanModal(arsipId){
+  if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat mencatat peminjaman','error'); return; }
   const setVal=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
   setVal('pinjamArsipId',arsipId||'');
   setVal('pinjamNama',''); setVal('pinjamAlasan',''); setVal('pinjamCatatan','');
@@ -1204,14 +1259,45 @@ document.getElementById('btnSimpanMaster').addEventListener('click',async()=>{ c
 });
 
 /* ============ USERS ============ */
-const ROLE_NAMES={admin:'Administrator',staff:'Staf',kepala:'Kepala'};
+const ROLE_NAMES={admin:'Administrator',staff:'Staf Arsip',kepala:'Kepala Kantor'};
+function syncRoleHint(){
+  const hint=document.getElementById('uRoleHint'), role=document.getElementById('uRole');
+  if(hint&&role) hint.textContent=ROLE_PERM[role.value]||'';
+}
 async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('/api/users'))||[]; const tb=document.getElementById('usersBody'); if(!tb)return; state.userMap={}; d.forEach(u=>state.userMap[u.id]=u);
-  tb.innerHTML=d.map(u=>`<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
+  const counts={admin:0,staff:0,kepala:0}; d.forEach(u=>{ counts[u.role]=(counts[u.role]||0)+1; });
+  const ca=document.getElementById('rcCountAdmin'); if(ca) ca.textContent=counts.admin+' pengguna';
+  const cs=document.getElementById('rcCountStaff'); if(cs) cs.textContent=counts.staff+' pengguna';
+  const ck=document.getElementById('rcCountKepala'); if(ck) ck.textContent=counts.kepala+' pengguna';
+  tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); return `<tr><td class="strong">${esc(u.nama)}</td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
-  </div></td></tr>`).join('');
+  </div></td></tr>`; }).join('');
   }catch(e){ toast(e.message,'error'); } }
-function buildUsersLayout(){ const sec=document.getElementById('page-users'); if(sec.innerHTML.trim())return; sec.innerHTML=`<div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`; }
+function buildUsersLayout(){ const sec=document.getElementById('page-users'); if(sec.dataset.built)return; sec.dataset.built=1;
+  sec.innerHTML=`<div class="role-cards">
+      <div class="role-card rc-admin">
+        <div class="rc-head"><h4>Administrator</h4><span class="chip role-chip role-admin">Akses penuh</span></div>
+        <p>Mengelola seluruh sistem tanpa batasan.</p>
+        <ul><li>Semua menu &amp; seluruh aksi arsip</li><li>Kelola pengguna &amp; reset password</li><li>Kategori, data master, profil kantor</li><li>Log aktivitas, backup, hapus permanen</li></ul>
+        <span class="rc-count" id="rcCountAdmin">0 pengguna</span>
+      </div>
+      <div class="role-card">
+        <div class="rc-head"><h4>Staf Arsip</h4><span class="chip role-chip role-staff">Operasional</span></div>
+        <p>Menjalankan pekerjaan kearsipan harian.</p>
+        <ul><li>Tambah, ubah, hapus &amp; pulihkan arsip</li><li>Buku agenda, disposisi, peminjaman</li><li>Laporan, ekspor, import CSV</li><li>Data master &amp; lampiran</li></ul>
+        <span class="rc-count" id="rcCountStaff">0 pengguna</span>
+      </div>
+      <div class="role-card rc-kepala">
+        <div class="rc-head"><h4>Kepala Kantor</h4><span class="chip role-chip role-kepala">Pengawasan</span></div>
+        <p>Memantau dan memberi arahan tanpa mengubah data.</p>
+        <ul><li>Lihat arsip, laporan &amp; agenda</li><li>Buat dan tindak lanjuti disposisi</li><li>Pantau peminjaman</li><li>Tanpa ubah arsip, master, pengguna</li></ul>
+        <span class="rc-count" id="rcCountKepala">0 pengguna</span>
+      </div>
+    </div>
+    <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`;
+  syncRoleHint();
+}
 function resetUserPasswordFields(){
   ['rpBaru','rpUlangi'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.value=''; el.type='password'; } });
   document.querySelectorAll('#userPaneReset .pass-toggle').forEach(b=>{ b.classList.remove('on'); b.setAttribute('aria-pressed','false'); b.title='Tampilkan password'; });
@@ -1235,6 +1321,7 @@ function setUserTab(tab){
       document.getElementById('resetNama').textContent=u.nama||'—';
       document.getElementById('resetUsername').textContent='@'+(u.username||'');
       document.getElementById('resetRoleChip').textContent=ROLE_NAMES[u.role]||u.role||'Staf';
+      document.getElementById('resetRoleChip').className='chip role-chip '+roleMeta(u.role).chip;
     }
     resetUserPasswordFields();
   }
@@ -1255,6 +1342,7 @@ function updateRpStrength(){
   else { match.textContent='Password belum sama'; match.className='field-hint bad'; }
 }
 document.getElementById('userTabs').addEventListener('click',e=>{ const b=e.target.closest('.mtab'); if(b) setUserTab(b.dataset.utab); });
+document.getElementById('uRole').addEventListener('change',syncRoleHint);
 document.getElementById('rpBaru').addEventListener('input',updateRpStrength);
 document.getElementById('rpUlangi').addEventListener('input',updateRpStrength);
 function openTambahUser(){
@@ -1263,6 +1351,7 @@ function openTambahUser(){
   document.getElementById('uNama').value=''; document.getElementById('uRole').value='staff';
   const pw=document.getElementById('uPassword'); pw.value=''; pw.type='password';
   document.getElementById('uPassField').style.display='block'; document.getElementById('uAktifField').style.display='none';
+  syncRoleHint();
   setUserTab('edit');
   openModal('modalUser');
 }
@@ -1272,6 +1361,7 @@ window.editUser=function(id){ const u=state.userMap[id]; if(!u)return;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
   document.getElementById('uAktif').value=String(u.aktif);
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
+  syncRoleHint();
   setUserTab('edit');
   openModal('modalUser');
 };
@@ -1281,6 +1371,7 @@ window.resetPass=function(id){ const u=state.userMap[id]; if(!u)return;
   document.getElementById('uNama').value=u.nama; document.getElementById('uRole').value=u.role;
   document.getElementById('uAktif').value=String(u.aktif);
   document.getElementById('uPassField').style.display='none'; document.getElementById('uAktifField').style.display='block';
+  syncRoleHint();
   setUserTab('reset');
   openModal('modalUser');
   setTimeout(()=>{ try{ document.getElementById('rpBaru').focus({preventScroll:true}); }catch(e){} },160);
@@ -1381,6 +1472,7 @@ async function loadLogPage(){ try{ const d=await api('/api/log'); const tb=docum
 /* ============ LAMPIRAN ============ */
 window.openLampiran=async function(id){
   document.getElementById('lampiranArsipId').value=id;
+  const uz=document.getElementById('uploadZone'); if(uz) uz.style.display=canManage()?'':'none';
   try{ const d=await api('/api/arsip/'+id); renderFileList(d.lampiran||[]); openModal('modalLampiran'); }
   catch(e){ toast(e.message,'error'); }
 };
@@ -1404,6 +1496,7 @@ if(uploadZone && fileInput){
   uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover'); if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files);});
 }
 async function uploadFiles(files){
+  if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat mengunggah lampiran','error'); return; }
   const aid=document.getElementById('lampiranArsipId').value;
   if(!aid || !files || !files.length) return;
   const zone=document.getElementById('uploadZone'); if(zone) zone.classList.add('uploading');
@@ -1639,6 +1732,7 @@ function fillBgTahun(selected){
 }
 async function fillBgArsip(){ const sel=document.getElementById('bgArsip'); if(!sel)return; try{ const list=await loadArsipOptions(); sel.innerHTML='<option value="">— tanpa arsip —</option>'+list.map(a=>`<option value="${a.id}">${esc(a.nomor_arsip+' — '+a.judul)}</option>`).join(''); }catch(e){} }
 async function openBukuAgendaModal(x){
+  if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat mencatat agenda','error'); return; }
   const filterTahun=(()=>{ const s=document.getElementById('bgTahunFilter'); return s&&s.value?Number(s.value):null; })();
   fillBgTahun(x?Number(x.tahun):filterTahun); await fillBgArsip();
   const jenisEl=document.getElementById('bgJenis'), tahunEl=document.getElementById('bgTahun');
@@ -1732,6 +1826,7 @@ window.openKegiatanModalById=async function(id){ try{ await populateKegMap(); }c
   const x=state.kegMap[id]; if(!x){ toast('Kegiatan tidak ditemukan, memuat ulang kalender','info'); state.kegMapLoaded=false; loadKalenderPage(); return; }
   openKegiatanModal(x); };
 function openKegiatanModal(x){
+  if(!canManage()){ toast('Hanya Staf Arsip dan Administrator yang dapat mengubah kegiatan','error'); return; }
   if(x){ document.getElementById('kgId').value=x.id; document.getElementById('kgJudul').value=x.judul; document.getElementById('kgTanggal').value=x.tanggal; document.getElementById('kgTipe').value=x.tipe||'kegiatan'; document.getElementById('kgJamMulai').value=x.jam_mulai||''; document.getElementById('kgJamSelesai').value=x.jam_selesai||''; document.getElementById('kgLokasi').value=x.lokasi||''; document.getElementById('kgKet').value=x.keterangan||''; document.getElementById('kegiatanModalTitle').textContent='Edit Kegiatan'; }
   else { document.getElementById('kgId').value=''; document.getElementById('kgJudul').value=''; document.getElementById('kgTanggal').value=toYMD(new Date()); document.getElementById('kgTipe').value='rapat'; document.getElementById('kgJamMulai').value=''; document.getElementById('kgJamSelesai').value=''; document.getElementById('kgLokasi').value=''; document.getElementById('kgKet').value=''; document.getElementById('kegiatanModalTitle').textContent='Tambah Kegiatan'; }
   openModal('modalKegiatan');
@@ -1824,7 +1919,7 @@ function buildStaticCmdk(q){
   });
   const acts=[];
   if(canManage()) acts.push({title:'Tambah Arsip Baru',sub:'Buka formulir arsip',icon:ICONS.plus,kbd:'N',run:()=>openTambahArsip()});
-  acts.push({title:'Profil Kantor',sub:'Identitas, kop surat, dan cadangan',icon:ICONS.edit,run:()=>showPage('profil')});
+  if(isAdmin()) acts.push({title:'Profil Kantor',sub:'Identitas, kop surat, dan cadangan',icon:ICONS.edit,run:()=>showPage('profil')});
   acts.push({title:'Ganti Password',sub:'Perbarui kata sandi akun',icon:ICONS.edit,run:()=>openGantiPass()});
   acts.push({title:'Pintasan Keyboard',sub:'Lihat daftar pintasan',icon:ICONS.grid,kbd:'?',run:()=>showShortcuts()});
   if(canManage()) acts.push({title:'Import CSV',sub:'Impor arsip dari berkas CSV',icon:ICONS.plus,run:()=>openImportModal()});

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Arsip — Kantor Pertanahan</title>
   <meta name="description" content="Sistem Pengelolaan Arsip Digital Kantor Pertanahan — Dokumentasi, Disposisi, Peminjaman, dan Laporan">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b3b2e'/%3E%3Cg fill='%23d7f3e5'%3E%3Crect x='14' y='22' width='12' height='26' rx='2'/%3E%3Crect x='26' y='14' width='12' height='34' rx='2'/%3E%3Crect x='38' y='28' width='12' height='20' rx='2'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="img/logo-atrbpn.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
 <div id="splashScreen" class="splash">
   <div class="splash-card">
     <div class="splash-emblem">
-      <svg viewBox="0 0 64 64" width="72" height="72" fill="none"><rect x="2" y="2" width="60" height="60" rx="14" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.4)"/><g fill="#fff"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+      <img src="img/logo-atrbpn.png" alt="Logo ATR/BPN" width="80" height="80">
     </div>
     <h1 class="splash-title">Sistem Arsip</h1>
     <p class="splash-sub">Kantor Pertanahan</p>
@@ -29,10 +29,7 @@
     <div class="login-orbit orbit-2"></div>
     <div class="login-orbit orbit-3"></div>
     <div class="brand-emblem pop-in">
-      <svg viewBox="0 0 64 64" width="84" height="84" fill="none">
-        <rect x="2" y="2" width="60" height="60" rx="14" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)"/>
-        <g fill="#fff"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g>
-      </svg>
+      <img src="img/logo-atrbpn.png" alt="Logo Kementerian ATR/BPN" width="100" height="100">
     </div>
     <h1 class="fade-up">Kantor Pertanahan</h1>
     <p class="brand-sub fade-up-2">Badan Pertanahan Nasional</p>
@@ -43,7 +40,7 @@
   <div class="login-form-panel">
     <div class="login-form-inner slide-up">
       <div class="login-mobile-logo">
-        <svg viewBox="0 0 64 64" width="54" height="54" fill="none"><rect x="2" y="2" width="60" height="60" rx="14" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+        <img src="img/logo-atrbpn.png" alt="Logo ATR/BPN" width="56" height="56">
       </div>
       <h2 class="login-title">Selamat Datang</h2>
       <p class="login-sub">Masuk untuk mengelola arsip, disposisi, peminjaman, dan laporan dokumen kantor.</p>
@@ -82,7 +79,7 @@
 <div id="verifyPage" class="verify-wrap" style="display:none">
   <div class="verify-card">
     <div class="verify-brand">
-      <svg viewBox="0 0 64 64" width="44" height="44" fill="none"><rect x="2" y="2" width="60" height="60" rx="13" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+      <img src="img/logo-atrbpn.png" alt="Logo ATR/BPN" width="44" height="44">
       <div><strong id="verifyKantor">Kantor Pertanahan</strong><span id="verifySub">Badan Pertanahan Nasional</span></div>
     </div>
     <div id="verifyBody" class="verify-body">
@@ -100,14 +97,15 @@
 
   <!-- TOP BAR -->
   <header class="app-topbar">
-    <button id="menuToggle" class="icon-btn topbar-menu">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    <button id="menuToggle" class="icon-btn topbar-menu" aria-label="Buka menu navigasi" aria-controls="sidebar" aria-expanded="false">
+      <svg class="ic-menu" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <svg class="ic-close" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="topbar-brand">
       <div class="topbar-emblem">
-        <svg viewBox="0 0 64 64" width="40" height="40" fill="none"><rect x="2" y="2" width="60" height="60" rx="13" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+        <img src="img/logo-atrbpn.png" alt="Logo ATR/BPN" width="40" height="40">
       </div>
-      <div class="topbar-brand-text"><strong>Kantor Pertanahan</strong><span>Badan Pertanahan Nasional</span></div>
+      <div class="topbar-brand-text"><strong>Kantor Pertanahan</strong><span>Kementerian ATR/BPN</span></div>
     </div>
     <button id="btnCmdk" type="button" class="topbar-search" aria-label="Pencarian cepat" title="Pencarian cepat (Ctrl+K)">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -126,21 +124,22 @@
           <div id="notifList" class="notif-list"><div class="notif-empty">Tidak ada notifikasi</div></div>
         </div>
       </div>
-      <div class="topbar-user" id="userMenu">
+      <div class="topbar-user" id="userMenu" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="Menu akun">
         <div class="user-avatar" id="userAvatar">A</div>
-        <div class="topbar-user-text"><strong id="userName">-</strong><span id="userRole">-</span></div>
+        <div class="topbar-user-text"><strong id="userName">-</strong><span id="userRole" class="role-chip role-staff">Staf Arsip</span></div>
+        <svg class="user-caret" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <button id="btnLogout" class="icon-btn" title="Keluar">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </button>
     </div>
     <div id="userDropdown" class="user-dropdown" style="display:none">
-      <div class="ud-head"><strong id="udName">-</strong><span id="udRole">-</span></div>
+      <div class="ud-head"><strong id="udName">-</strong><span id="udRole">Staf Arsip</span><div class="ud-perm" id="udPerm">Akses operasional arsip</div></div>
       <button id="btnGantiPass" class="ud-item">Ganti Password</button>
       <button id="btnShortcuts" class="ud-item">Pintasan Keyboard</button>
     </div>
   </header>
-  <div class="gov-stripe" aria-hidden="true"></div>
+  <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
   <div class="app-body">
     <!-- SIDEBAR -->
@@ -176,7 +175,7 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           <span>Kategori</span>
         </a>
-        <a href="#" class="nav-item" data-page="master">
+        <a href="#" class="nav-item nav-manage" data-page="master">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
           <span>Data Master</span>
         </a>
@@ -197,7 +196,7 @@
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           <span>Tempat Sampah</span>
         </a>
-        <a href="#" class="nav-item" data-page="profil">
+        <a href="#" class="nav-item nav-admin" data-page="profil">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01"/></svg>
           <span>Profil Kantor</span>
         </a>
@@ -242,7 +241,7 @@
       <footer class="app-footer">
         <div class="footer-brand">
           <div class="footer-emblem">
-            <svg viewBox="0 0 64 64" width="30" height="30" fill="none"><rect x="2" y="2" width="60" height="60" rx="12" fill="#0b3b2e"/><g fill="#d7f3e5"><rect x="14" y="22" width="12" height="26" rx="2"/><rect x="26" y="14" width="12" height="34" rx="2"/><rect x="38" y="28" width="12" height="20" rx="2"/></g></svg>
+            <img src="img/logo-atrbpn.png" alt="Logo ATR/BPN" width="30" height="30">
           </div>
           <div><strong id="footBrand">Kantor Pertanahan — Badan Pertanahan Nasional</strong><span>Sistem Pengelolaan Arsip Digital</span></div>
         </div>
@@ -449,7 +448,8 @@
         <div class="field"><label>Username</label><input type="text" id="uUsername" class="ctl" placeholder="Username"></div>
         <div class="field"><label>Nama Lengkap</label><input type="text" id="uNama" class="ctl" placeholder="Nama lengkap"></div>
         <div class="field"><label>Role</label>
-          <select id="uRole" class="ctl"><option value="staff">Staf</option><option value="admin">Administrator</option><option value="kepala">Kepala</option></select>
+          <select id="uRole" class="ctl"><option value="staff">Staf Arsip</option><option value="admin">Administrator</option><option value="kepala">Kepala Kantor</option></select>
+          <p class="field-hint role-hint" id="uRoleHint">Operasional: kelola arsip, agenda, disposisi, peminjaman, dan data master.</p>
         </div>
         <div class="field" id="uPassField"><label>Password <span class="req">*</span></label><input type="password" id="uPassword" class="ctl" placeholder="Minimal 6 karakter"></div>
         <div class="field" id="uAktifField" style="display:none">
