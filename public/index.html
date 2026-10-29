@@ -9,6 +9,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<script>
+// Deteksi base path untuk GitHub Pages secara dinamis
+(function() {
+  var path = window.location.pathname;
+  var repoPath = '/ARCHIVING-PROJECT-BY-THE-NATIONAL-LAND-AGENCY-BPN/';
+  if (path.startsWith(repoPath) || path.indexOf(repoPath) > -1) {
+    var base = document.createElement('base');
+    base.href = repoPath;
+    document.head.appendChild(base);
+  }
+})();
+</script>
 
 <!-- ============ SPLASH / PEMUATAN ============ -->
 <div id="splashScreen" class="splash">
