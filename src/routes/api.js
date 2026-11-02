@@ -677,6 +677,20 @@ router.get('/dashboard', requireAuth, (req, res) => {
 });
 
 /* ============ EKSPOR EXCEL (.xlsx) ============ */
+const XLSX_STATUS = {
+  aktif: { label: 'Aktif', bg: 'FFDCF3E9', fg: 'FF176A54', bold: true },
+  arsip: { label: 'Arsip', bg: 'FFF6EDD7', fg: 'FFA9792C', bold: false },
+  dipinjam: { label: 'Dipinjam', bg: 'FFFDEAEA', fg: 'FFC76B76', bold: true },
+  terlambat: { label: 'Terlambat', bg: 'FFFDEAEA', fg: 'FFE05C47', bold: true },
+  dikembalikan: { label: 'Dikembalikan', bg: 'FFF0FAF6', fg: 'FF176A54', bold: false },
+  hilang: { label: 'Hilang', bg: 'FFFBEAEA', fg: 'FFC0392B', bold: true },
+  rusak: { label: 'Rusak', bg: 'FFF1ECFB', fg: 'FF7D5BC6', bold: false }
+};
+function isoToDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : (v || '');
+}
+
 router.get('/ekspor/xlsx', requireAuth, async (req, res) => {
   try {
     const { dari, sampai, kategori } = req.query;
@@ -684,6 +698,13 @@ router.get('/ekspor/xlsx', requireAuth, async (req, res) => {
       'Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal',
       'Pengirim', 'Penerima', 'Instansi', 'Status'
     ];
+    const colSize = [[14, 18], [11, 13], [16, 26], [12, 20], [24, 40], [18, 32], [14, 22], [12, 18], [14, 24], [10, 14]];
+    const centerCols = ['Nomor Arsip', 'Tanggal', 'Kategori', 'Status'];
+    const FIELD = {
+      'Nomor Arsip': 'nomor_arsip', 'Tanggal': 'tanggal_arsip', 'Kategori': 'kategori', 'No Surat': 'nomor_surat',
+      'Judul': 'judul', 'Perihal': 'perihal', 'Pengirim': 'pengirim', 'Penerima': 'penerima',
+      'Instansi': 'instansi', 'Status': 'status'
+    };
     const rows = q.db.prepare(`
       SELECT a.nomor_arsip, a.tanggal_arsip, k.nama AS kategori, a.nomor_surat, a.judul, a.perihal,
              COALESCE(a.pengirim,'') AS pengirim, COALESCE(a.penerima,'') AS penerima,
@@ -698,13 +719,80 @@ router.get('/ekspor/xlsx', requireAuth, async (req, res) => {
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Sistem Arsip Kantor Pertanahan';
     const ws = wb.addWorksheet('Rekap Arsip');
-    ws.columns = header.map(h => ({ header: h, width: Math.max(h.length + 6, 14) }));
-    for (const r of rows) ws.addRow(Object.values(r));
-    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B3B2E' } };
-    ws.getRow(1).height = 22;
-    ws.getRow(1).alignment = { vertical: 'middle' };
-    ws.eachRow((row, n) => { row.eachCell(c => { c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; }); });
+    const border = { style: 'thin', color: { argb: 'FFD5E2DA' } };
+
+    const headerRow = ws.addRow(header);
+    headerRow.height = 26;
+    headerRow.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B3B2E' } };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+        left: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+        bottom: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+        right: { style: 'thin', color: { argb: 'FF0B3B2E' } }
+      };
+    });
+
+    const widths = header.map(h => h.length);
+    rows.forEach((r, idx) => {
+      const values = header.map(h => {
+        if (h === 'Tanggal') return isoToDate(r.tanggal_arsip);
+        if (h === 'Status') { const st = XLSX_STATUS[String(r.status || '').toLowerCase()]; return st ? st.label : (r.status || ''); }
+        return r[FIELD[h]] == null ? '' : r[FIELD[h]];
+      });
+      values.forEach((v, i) => {
+        const len = (v instanceof Date) ? 10 : String(v || '').length;
+        if (len > widths[i]) widths[i] = len;
+      });
+
+      const row = ws.addRow(values);
+      const striping = (idx + 1) % 2 === 0 ? 'FFF0FAF6' : 'FFFFFFFF';
+      row.eachCell((cell, colNumber) => {
+        const colName = header[colNumber - 1];
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: striping } };
+        cell.font = { size: 10, color: { argb: 'FF203028' } };
+        cell.alignment = { vertical: 'middle', wrapText: true, horizontal: centerCols.includes(colName) ? 'center' : 'left' };
+        cell.border = { top: border, left: border, bottom: border, right: border };
+        if (colName === 'Tanggal' && cell.value instanceof Date) cell.numFmt = 'dd/mm/yyyy';
+        if (colName === 'Status' && r.status) {
+          const sc = XLSX_STATUS[String(r.status).toLowerCase()];
+          if (sc) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
+            cell.font = { size: 10, bold: sc.bold, color: { argb: sc.fg } };
+          }
+        }
+      });
+    });
+
+    header.forEach((h, i) => {
+      const size = colSize[i] || [10, 30];
+      ws.getColumn(i + 1).width = Math.min(Math.max(widths[i] + 2, size[0]), size[1]);
+    });
+
+    for (let rn = 2; rn <= ws.rowCount; rn++) {
+      const dataRow = ws.getRow(rn);
+      let lines = 1;
+      dataRow.eachCell((cell, colNumber) => {
+        const text = cell.value instanceof Date ? 10 : String(cell.value || '').length;
+        lines = Math.max(lines, Math.ceil(text / (ws.getColumn(colNumber).width - 1)));
+      });
+      dataRow.height = Math.max(20, lines * 13 + 4);
+    }
+
+    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: header.length } };
+    ws.pageSetup = {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+      printTitlesRow: '1:1',
+      margins: { left: 0.35, right: 0.35, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+    };
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="rekap-arsip-' + Date.now() + '.xlsx"');

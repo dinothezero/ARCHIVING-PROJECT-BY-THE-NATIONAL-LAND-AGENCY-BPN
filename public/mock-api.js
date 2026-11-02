@@ -1139,7 +1139,7 @@
       return {
         nomor_arsip: a.nomor_arsip,
         tanggal_arsip: a.tanggal_arsip,
-        kategori: (k.kode || '') + ' - ' + (k.nama || ''),
+        kategori: [k.kode, k.nama].filter(Boolean).join(' - '),
         nomor_surat: a.nomor_surat || '',
         judul: a.judul,
         perihal: a.perihal || '',
@@ -1147,7 +1147,7 @@
         penerima: a.penerima || '',
         instansi: i.nama || '',
         unit: u.nama || '',
-        lokasi: (l.kode || '') + ' - ' + (l.nama || ''),
+        lokasi: [l.kode, l.nama].filter(Boolean).join(' - '),
         status: a.status
       };
     });
@@ -1196,11 +1196,28 @@
     downloadText(buildCsv(dari, sampai, kategori), 'rekap-arsip-' + Date.now() + '.csv', 'text/csv; charset=utf-8');
   };
 
+  var XLSX_STATUS = {
+    aktif: { label: 'Aktif', bg: 'FFDCF3E9', fg: 'FF176A54', bold: true },
+    arsip: { label: 'Arsip', bg: 'FFF6EDD7', fg: 'FFA9792C', bold: false },
+    dipinjam: { label: 'Dipinjam', bg: 'FFFDEAEA', fg: 'FFC76B76', bold: true },
+    terlambat: { label: 'Terlambat', bg: 'FFFDEAEA', fg: 'FFE05C47', bold: true },
+    dikembalikan: { label: 'Dikembalikan', bg: 'FFF0FAF6', fg: 'FF176A54', bold: false },
+    hilang: { label: 'Hilang', bg: 'FFFBEAEA', fg: 'FFC0392B', bold: true },
+    rusak: { label: 'Rusak', bg: 'FFF1ECFB', fg: 'FF7D5BC6', bold: false }
+  };
+  function isoToDate(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+    return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : (v || '');
+  }
+
   window.__mockExportXlsx = async function (dari, sampai, kategori) {
     await ensureReady();
     var rows = laporanRows(dari, sampai, kategori);
     var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Unit', 'Lokasi', 'Status'];
-    
+    var colSize = [[14, 18], [11, 13], [16, 26], [12, 20], [24, 40], [18, 32], [14, 22], [12, 18], [14, 24], [10, 18], [12, 20], [10, 14]];
+    var border = { style: 'thin', color: { argb: 'FFD5E2DA' } };
+    var centerCols = ['Nomor Arsip', 'Tanggal', 'Kategori', 'Status'];
+
     if (typeof window.ExcelJS === 'undefined') {
       // Fallback ke CSV bila ExcelJS tidak termuat
       window.__mockExportCsv(dari, sampai, kategori);
@@ -1209,99 +1226,86 @@
 
     try {
       var workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Sistem Arsip Kantor Pertanahan';
       var worksheet = workbook.addWorksheet('Rekap Arsip');
 
-      // Tambah header dengan styling
       var headerRow = worksheet.addRow(header);
+      headerRow.height = 26;
       headerRow.eachCell(function (cell) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: '0B3B2E' }
-        };
-        cell.font = {
-          bold: true,
-          color: { argb: 'FFFFFF' },
-          size: 11
-        };
-        cell.alignment = {
-          horizontal: 'center',
-          vertical: 'middle'
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B3B2E' } };
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+          left: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+          bottom: { style: 'thin', color: { argb: 'FF0B3B2E' } },
+          right: { style: 'thin', color: { argb: 'FF0B3B2E' } }
         };
       });
 
-      // Tambah data dengan styling zebra striping
+      var widths = header.map(function (h) { return h.length; });
       rows.forEach(function (r, idx) {
-        var rowData = header.map(function (h) { return r[COLMAP[h]]; });
-        var row = worksheet.addRow(rowData);
-        var isEven = (idx + 1) % 2 === 0;
+        var values = header.map(function (h) {
+          var v = r[COLMAP[h]];
+          if (h === 'Tanggal') return isoToDate(v);
+          if (h === 'Status') { var st = XLSX_STATUS[String(v || '').toLowerCase()]; return st ? st.label : (v || ''); }
+          return v == null ? '' : v;
+        });
+        values.forEach(function (v, i) {
+          var len = (v instanceof Date) ? 10 : String(v || '').length;
+          if (len > widths[i]) widths[i] = len;
+        });
+
+        var row = worksheet.addRow(values);
+        var striping = (idx + 1) % 2 === 0 ? 'FFF0FAF6' : 'FFFFFFFF';
 
         row.eachCell(function (cell, colNumber) {
-          // Styling baris bergantian
-          if (isEven) {
-            cell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'F0FAF6' }
-            };
-          } else {
-            cell.fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FFFFFF' }
-            };
-          }
-          cell.font = {
-            size: 10,
-            color: { argb: '203028' }
-          };
+          var colName = header[colNumber - 1];
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: striping } };
+          cell.font = { size: 10, color: { argb: 'FF203028' } };
+          cell.alignment = { vertical: 'middle', wrapText: true, horizontal: centerCols.indexOf(colName) !== -1 ? 'center' : 'left' };
+          cell.border = { top: border, left: border, bottom: border, right: border };
 
-          // Styling khusus untuk kolom status
-          if (header[colNumber - 1] === 'Status' && r.status) {
-            var statusLower = String(r.status).toLowerCase();
-            var statusColors = {
-              'aktif': { bg: 'D4EDDA', fg: '155724', bold: true },
-              'arsip': { bg: 'E2E3E5', fg: '383D41', bold: false },
-              'dipinjam': { bg: 'FFF3CD', fg: '856404', bold: true },
-              'terlambat': { bg: 'F8D7DA', fg: '721C24', bold: true },
-              'dikembalikan': { bg: 'D1ECF1', fg: '0C5460', bold: false },
-              'hilang': { bg: 'F5C6CB', fg: '721C24', bold: true },
-              'rusak': { bg: 'E9ECEF', fg: '495057', bold: false }
-            };
-            var sc = statusColors[statusLower];
+          if (colName === 'Tanggal' && cell.value instanceof Date) cell.numFmt = 'dd/mm/yyyy';
+
+          if (colName === 'Status' && r.status) {
+            var sc = XLSX_STATUS[String(r.status).toLowerCase()];
             if (sc) {
-              cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: sc.bg }
-              };
-              cell.font = {
-                size: 10,
-                bold: sc.bold,
-                color: { argb: sc.fg }
-              };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: sc.bg } };
+              cell.font = { size: 10, bold: sc.bold, color: { argb: sc.fg } };
             }
           }
         });
       });
 
-      // Set lebar kolom otomatis
-      worksheet.columns.forEach(function (column, idx) {
-        var maxLength = 0;
-        column.eachCell({ includeEmpty: true }, function (cell) {
-          var value = String(cell.value || '');
-          if (value.length > maxLength) {
-            maxLength = value.length;
-          }
-        });
-        var width = Math.min(Math.max(maxLength + 2, 12), 50);
-        column.width = width;
+      header.forEach(function (h, i) {
+        var size = colSize[i] || [10, 30];
+        worksheet.getColumn(i + 1).width = Math.min(Math.max(widths[i] + 2, size[0]), size[1]);
       });
 
-      // Freeze baris header
-      worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+      for (var rn = 2; rn <= worksheet.rowCount; rn++) {
+        var dataRow = worksheet.getRow(rn);
+        var lines = 1;
+        dataRow.eachCell(function (cell, colNumber) {
+          var text = cell.value instanceof Date ? 10 : String(cell.value || '').length;
+          lines = Math.max(lines, Math.ceil(text / (worksheet.getColumn(colNumber).width - 1)));
+        });
+        dataRow.height = Math.max(20, lines * 13 + 4);
+      }
 
-      // Generate buffer
+      worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+      worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: header.length } };
+      worksheet.pageSetup = {
+        paperSize: 9,
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        horizontalCentered: true,
+        printTitlesRow: '1:1',
+        margins: { left: 0.35, right: 0.35, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 }
+      };
+
       var buffer = await workbook.xlsx.writeBuffer();
       var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
