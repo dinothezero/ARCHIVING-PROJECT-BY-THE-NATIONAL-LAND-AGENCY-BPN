@@ -107,7 +107,73 @@
     kepala_nama: 'Ir. Contoh Surya, M.Si.',
     kepala_nip: '19600101 198501 1 001',
     kota_kop: 'Jakarta',
-    motto: 'Mewujudkan Pelayanan Pertanahan yang Prima dan Terpercaya'
+    motto: 'Mewujudkan Pelayanan Pertanahan yang Prima dan Terpercaya',
+    role_permissions: {
+      admin: {
+        dashboard: true,
+        arsip: { view: true, create: true, edit: true, delete: true },
+        buku_agenda: { view: true, create: true, edit: true, delete: true },
+        disposisi: { view: true, create: true, edit: true, delete: true },
+        peminjaman: { view: true, create: true, edit: true, delete: true },
+        kalender: { view: true, create: true, edit: true, delete: true },
+        kategori: { view: true, create: true, edit: true, delete: true },
+        master: { view: true, create: true, edit: true, delete: true },
+        users: { view: true, create: true, edit: true, delete: true },
+        log: { view: true },
+        laporan: { view: true, export: true },
+        sampah: { view: true, restore: true, delete_permanent: true },
+        profil: { view: true, edit: true },
+        backup: true
+      },
+      staff: {
+        dashboard: true,
+        arsip: { view: true, create: true, edit: true, delete: true },
+        buku_agenda: { view: true, create: true, edit: true, delete: true },
+        disposisi: { view: true, create: true, edit: true, delete: true },
+        peminjaman: { view: true, create: true, edit: true, delete: true },
+        kalender: { view: true, create: true, edit: true, delete: true },
+        kategori: { view: true, create: true, edit: true, delete: true },
+        master: { view: true, create: true, edit: true, delete: true },
+        users: { view: false, create: false, edit: false, delete: false },
+        log: { view: false },
+        laporan: { view: true, export: true },
+        sampah: { view: true, restore: true, delete_permanent: false },
+        profil: { view: false, edit: false },
+        backup: false
+      },
+      kepala: {
+        dashboard: true,
+        arsip: { view: true, create: false, edit: false, delete: false },
+        buku_agenda: { view: true, create: false, edit: false, delete: false },
+        disposisi: { view: true, create: true, edit: true, delete: false },
+        peminjaman: { view: true, create: false, edit: false, delete: false },
+        kalender: { view: true, create: false, edit: false, delete: false },
+        kategori: { view: true, create: false, edit: false, delete: false },
+        master: { view: true, create: false, edit: false, delete: false },
+        users: { view: false, create: false, edit: false, delete: false },
+        log: { view: false },
+        laporan: { view: true, export: true },
+        sampah: { view: false, restore: false, delete_permanent: false },
+        profil: { view: false, edit: false },
+        backup: false
+      },
+      eksternal: {
+        dashboard: true,
+        arsip: { view: true, create: false, edit: false, delete: false },
+        buku_agenda: { view: true, create: false, edit: false, delete: false },
+        disposisi: { view: false, create: false, edit: false, delete: false },
+        peminjaman: { view: false, create: false, edit: false, delete: false },
+        kalender: { view: true, create: false, edit: false, delete: false },
+        kategori: { view: true, create: false, edit: false, delete: false },
+        master: { view: false, create: false, edit: false, delete: false },
+        users: { view: false, create: false, edit: false, delete: false },
+        log: { view: false },
+        laporan: { view: true, export: false },
+        sampah: { view: false, restore: false, delete_permanent: false },
+        profil: { view: false, edit: false },
+        backup: false
+      }
+    }
   };
 
   async function seed() {
@@ -124,6 +190,75 @@
         if (!Object.prototype.hasOwnProperty.call(u, 'foto')) { u.foto = null; upgraded = true; }
       });
       if (!existing.settings) existing.settings = clone(SETTINGS);
+      if (!existing.settings.role_permissions) {
+        existing.settings.role_permissions = {
+          admin: {
+            dashboard: true,
+            arsip: { view: true, create: true, edit: true, delete: true },
+            buku_agenda: { view: true, create: true, edit: true, delete: true },
+            disposisi: { view: true, create: true, edit: true, delete: true },
+            peminjaman: { view: true, create: true, edit: true, delete: true },
+            kalender: { view: true, create: true, edit: true, delete: true },
+            kategori: { view: true, create: true, edit: true, delete: true },
+            master: { view: true, create: true, edit: true, delete: true },
+            users: { view: true, create: true, edit: true, delete: true },
+            log: { view: true },
+            laporan: { view: true, export: true },
+            sampah: { view: true, restore: true, delete_permanent: true },
+            profil: { view: true, edit: true },
+            backup: true
+          },
+          staff: {
+            dashboard: true,
+            arsip: { view: true, create: true, edit: true, delete: true },
+            buku_agenda: { view: true, create: true, edit: true, delete: true },
+            disposisi: { view: true, create: true, edit: true, delete: true },
+            peminjaman: { view: true, create: true, edit: true, delete: true },
+            kalender: { view: true, create: true, edit: true, delete: true },
+            kategori: { view: true, create: true, edit: true, delete: true },
+            master: { view: true, create: true, edit: true, delete: true },
+            users: { view: false, create: false, edit: false, delete: false },
+            log: { view: false },
+            laporan: { view: true, export: true },
+            sampah: { view: true, restore: true, delete_permanent: false },
+            profil: { view: false, edit: false },
+            backup: false
+          },
+          kepala: {
+            dashboard: true,
+            arsip: { view: true, create: false, edit: false, delete: false },
+            buku_agenda: { view: true, create: false, edit: false, delete: false },
+            disposisi: { view: true, create: true, edit: true, delete: false },
+            peminjaman: { view: true, create: false, edit: false, delete: false },
+            kalender: { view: true, create: false, edit: false, delete: false },
+            kategori: { view: true, create: false, edit: false, delete: false },
+            master: { view: true, create: false, edit: false, delete: false },
+            users: { view: false, create: false, edit: false, delete: false },
+            log: { view: false },
+            laporan: { view: true, export: true },
+            sampah: { view: false, restore: false, delete_permanent: false },
+            profil: { view: false, edit: false },
+            backup: false
+          },
+          eksternal: {
+            dashboard: true,
+            arsip: { view: true, create: false, edit: false, delete: false },
+            buku_agenda: { view: true, create: false, edit: false, delete: false },
+            disposisi: { view: false, create: false, edit: false, delete: false },
+            peminjaman: { view: false, create: false, edit: false, delete: false },
+            kalender: { view: true, create: false, edit: false, delete: false },
+            kategori: { view: true, create: false, edit: false, delete: false },
+            master: { view: false, create: false, edit: false, delete: false },
+            users: { view: false, create: false, edit: false, delete: false },
+            log: { view: false },
+            laporan: { view: true, export: false },
+            sampah: { view: false, restore: false, delete_permanent: false },
+            profil: { view: false, edit: false },
+            backup: false
+          }
+        };
+        upgraded = true;
+      }
       if (upgraded) save();
       if (existing.notifikasi && existing.notifikasi.some(function (n) { return n.judul === 'Login berhasil'; })) {
         existing.notifikasi = existing.notifikasi.filter(function (n) { return n.judul !== 'Login berhasil'; });
@@ -810,8 +945,14 @@
     if (path === '/api/settings' && method === 'GET') { requireAuth(); return clone(DB.settings); }
     if (path === '/api/settings' && method === 'PUT') {
       requireRole('admin');
-      Object.keys(body).forEach(function (k) { DB.settings[k] = String(body[k] == null ? '' : body[k]); });
-      logAktivitas(currentUser().id, 'SETTING', 'settings', null, 'Perbarui profil kantor');
+      Object.keys(body).forEach(function (k) {
+        if (k === 'role_permissions' && typeof body[k] === 'object') {
+          DB.settings[k] = body[k];
+        } else {
+          DB.settings[k] = String(body[k] == null ? '' : body[k]);
+        }
+      });
+      logAktivitas(currentUser().id, 'SETTING', 'settings', null, 'Perbarui pengaturan kantor');
       save(); return { ok: true };
     }
 

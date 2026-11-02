@@ -208,14 +208,47 @@ function roleMeta(role) { return ROLE_META[role] || ROLE_META.staff; }
 function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
 function isKepala() { return state.currentUser && state.currentUser.role === 'kepala'; }
 function canManage() { return state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'staff'); }
+function hasPermission(feature, action = 'view') {
+  if (!state.currentUser) return false;
+  const role = state.currentUser.role;
+  const perms = state.settings && state.settings.role_permissions ? state.settings.role_permissions[role] : null;
+  if (!perms) {
+    return canManage();
+  }
+  if (feature === 'dashboard') return perms.dashboard === true;
+  if (feature === 'backup') return perms.backup === true;
+  const featurePerms = perms[feature];
+  if (!featurePerms) return false;
+  if (typeof featurePerms === 'boolean') return featurePerms;
+  return featurePerms[action] === true;
+}
 function canAccessPage(page) {
-  if (page === 'users' || page === 'log' || page === 'profil') return isAdmin();
-  if (page === 'sampah' || page === 'master') return canManage();
-  return true;
+  const pageMap = {
+    'dashboard': 'dashboard',
+    'arsip': 'arsip',
+    'buku-agenda': 'buku_agenda',
+    'disposisi': 'disposisi',
+    'peminjaman': 'peminjaman',
+    'kalender': 'kalender',
+    'kategori': 'kategori',
+    'master': 'master',
+    'users': 'users',
+    'log': 'log',
+    'laporan': 'laporan',
+    'sampah': 'sampah',
+    'profil': 'profil'
+  };
+  const feature = pageMap[page];
+  if (!feature) return true;
+  return hasPermission(feature, 'view');
 }
 function applyRoleVisibility() {
-  document.querySelectorAll('.nav-admin').forEach(n => { n.style.display = isAdmin() ? '' : 'none'; });
-  document.querySelectorAll('.nav-manage, .nav-item[data-page="sampah"]').forEach(n => { n.style.display = canManage() ? '' : 'none'; });
+  document.querySelectorAll('.nav-item').forEach(n => {
+    const page = n.dataset.page;
+    if (page) {
+      n.style.display = canAccessPage(page) ? '' : 'none';
+    }
+  });
 }
 async function showPage(page) {
   if (!canAccessPage(page)) { page = 'dashboard'; }
@@ -231,22 +264,22 @@ async function showPage(page) {
   actionEl.innerHTML = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  const manage = canManage();
   if (page === 'dashboard') { loadDashboard(); }
   else if (page === 'arsip') {
-    actionEl.innerHTML = (manage ? `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button><button id="btnImportArsip" class="btn btn-gold">Import CSV</button>` : '');
+    const canCreate = hasPermission('arsip', 'create');
+    actionEl.innerHTML = (canCreate ? `<button id="btnTambahArsip" class="btn btn-primary">${ICONS.plus} Tambah Arsip</button><button id="btnImportArsip" class="btn btn-gold">Import CSV</button>` : '');
     const ab = document.getElementById('btnTambahArsip'); if (ab) ab.onclick = openTambahArsip;
     const ib = document.getElementById('btnImportArsip'); if (ib) ib.onclick = openImportModal;
     await ensureDropdowns(); if (state.currentPage !== 'arsip') return;
     buildArsipLayout(); loadArsip();
   }
-  else if (page === 'buku-agenda') { if (manage) actionEl.innerHTML = `<button id="btnTambahBg" class="btn btn-primary">${ICONS.plus} Catat Agenda</button>`; const b = document.getElementById('btnTambahBg'); if (b) b.onclick = () => openBukuAgendaModal(); buildBukuAgendaLayout(); loadBukuAgenda(); }
-  else if (page === 'disposisi') { actionEl.innerHTML = `<button id="btnTambahDisp" class="btn btn-primary">${ICONS.plus} Buat Disposisi</button>`; document.getElementById('btnTambahDisp').onclick = () => openDisposisiModal(); buildDisposisiLayout(); loadDisposisi(); }
-  else if (page === 'peminjaman') { if (manage) actionEl.innerHTML = `<button id="btnTambahPinjam" class="btn btn-primary">${ICONS.plus} Catat Peminjaman</button>`; const b = document.getElementById('btnTambahPinjam'); if (b) b.onclick = () => openPeminjamanModal(); buildPeminjamanLayout(); loadPeminjaman(); }
-  else if (page === 'kalender') { if (manage) actionEl.innerHTML = `<button id="btnTambahKegiatan" class="btn btn-primary">${ICONS.plus} Tambah Kegiatan</button>`; const b = document.getElementById('btnTambahKegiatan'); if (b) b.onclick = () => openKegiatanModal(); buildKalenderLayout(); loadKalenderPage(); }
-  else if (page === 'kategori') { if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b = document.getElementById('btnTambahKategori'); if (b) b.onclick = openTambahKategori; buildKategoriLayout(); loadKategoriPage(); }
+  else if (page === 'buku-agenda') { if (hasPermission('buku_agenda', 'create')) actionEl.innerHTML = `<button id="btnTambahBg" class="btn btn-primary">${ICONS.plus} Catat Agenda</button>`; const b = document.getElementById('btnTambahBg'); if (b) b.onclick = () => openBukuAgendaModal(); buildBukuAgendaLayout(); loadBukuAgenda(); }
+  else if (page === 'disposisi') { if (hasPermission('disposisi', 'create')) actionEl.innerHTML = `<button id="btnTambahDisp" class="btn btn-primary">${ICONS.plus} Buat Disposisi</button>`; document.getElementById('btnTambahDisp').onclick = () => openDisposisiModal(); buildDisposisiLayout(); loadDisposisi(); }
+  else if (page === 'peminjaman') { if (hasPermission('peminjaman', 'create')) actionEl.innerHTML = `<button id="btnTambahPinjam" class="btn btn-primary">${ICONS.plus} Catat Peminjaman</button>`; const b = document.getElementById('btnTambahPinjam'); if (b) b.onclick = () => openPeminjamanModal(); buildPeminjamanLayout(); loadPeminjaman(); }
+  else if (page === 'kalender') { if (hasPermission('kalender', 'create')) actionEl.innerHTML = `<button id="btnTambahKegiatan" class="btn btn-primary">${ICONS.plus} Tambah Kegiatan</button>`; const b = document.getElementById('btnTambahKegiatan'); if (b) b.onclick = () => openKegiatanModal(); buildKalenderLayout(); loadKalenderPage(); }
+  else if (page === 'kategori') { if (hasPermission('kategori', 'create')) actionEl.innerHTML = `<button id="btnTambahKategori" class="btn btn-primary">${ICONS.plus} Tambah Kategori</button>`; const b = document.getElementById('btnTambahKategori'); if (b) b.onclick = openTambahKategori; buildKategoriLayout(); loadKategoriPage(); }
   else if (page === 'master') { buildMasterLayout(); loadMaster(); }
-  else if (page === 'users') { buildUsersLayout(); if (isAdmin()) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b = document.getElementById('btnTambahUser'); if (b) b.onclick = openTambahUser; loadUsersPage(); }
+  else if (page === 'users') { buildUsersLayout(); if (hasPermission('users', 'create')) actionEl.innerHTML = `<button id="btnTambahUser" class="btn btn-primary">${ICONS.plus} Tambah Pengguna</button>`; const b = document.getElementById('btnTambahUser'); if (b) b.onclick = openTambahUser; loadUsersPage(); }
   else if (page === 'laporan') { await ensureDropdowns(); if (state.currentPage !== 'laporan') return; loadLaporanPage(); }
   else if (page === 'sampah') { buildSampahLayout(); loadSampah(); }
   else if (page === 'log') { buildLogLayout(); loadLogPage(); }
@@ -1426,8 +1459,15 @@ function buildUsersLayout(){ const sec=document.getElementById('page-users'); if
         <span class="rc-count" id="rcCountEksternal">0 pengguna</span>
       </div>
     </div>
-    <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`;
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Daftar Pengguna</h3>
+        <button id="btnRolePermissions" class="btn btn-gold btn-sm">${ICONS.grid} Pengaturan Hak Akses</button>
+      </div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div>
+    </div>`;
   syncRoleHint();
+  document.getElementById('btnRolePermissions').onclick=openRolePermissionsModal;
 }
 function resetUserPasswordFields(){
   ['rpBaru','rpUlangi'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.value=''; el.type='password'; } });
@@ -1512,6 +1552,119 @@ window.resetPass=function(id){ const u=state.userMap[id]; if(!u)return;
   openModal('modalUser');
   setTimeout(()=>{ try{ document.getElementById('rpBaru').focus({preventScroll:true}); }catch(e){} },160);
 };
+async function openRolePermissionsModal(){
+  try{
+    const settings=await api('/api/settings');
+    const perms=settings.role_permissions||{};
+    const roles=['admin','staff','kepala','eksternal'];
+    const features=[
+      {id:'dashboard',label:'Dashboard',type:'boolean'},
+      {id:'arsip',label:'Arsip',type:'object',actions:['view','create','edit','delete']},
+      {id:'buku_agenda',label:'Buku Agenda',type:'object',actions:['view','create','edit','delete']},
+      {id:'disposisi',label:'Disposisi',type:'object',actions:['view','create','edit','delete']},
+      {id:'peminjaman',label:'Peminjaman',type:'object',actions:['view','create','edit','delete']},
+      {id:'kalender',label:'Kalender',type:'object',actions:['view','create','edit','delete']},
+      {id:'kategori',label:'Kategori',type:'object',actions:['view','create','edit','delete']},
+      {id:'master',label:'Data Master',type:'object',actions:['view','create','edit','delete']},
+      {id:'users',label:'Pengguna',type:'object',actions:['view','create','edit','delete']},
+      {id:'log',label:'Log Aktivitas',type:'object',actions:['view']},
+      {id:'laporan',label:'Laporan',type:'object',actions:['view','export']},
+      {id:'sampah',label:'Tempat Sampah',type:'object',actions:['view','restore','delete_permanent']},
+      {id:'profil',label:'Profil Kantor',type:'object',actions:['view','edit']},
+      {id:'backup',label:'Backup Data',type:'boolean'}
+    ];
+    const html=`
+      <div class="role-permissions-container">
+        <div class="rp-tabs">
+          ${roles.map(r=>`<button class="rp-tab ${r==='admin'?'active':''}" data-role="${r}">${ROLE_NAMES[r]}</button>`).join('')}
+        </div>
+        <div class="rp-content">
+          ${roles.map(r=>`
+            <div class="rp-panel ${r==='admin'?'active':''}" data-role="${r}">
+              <h4>Hak Akses - ${ROLE_NAMES[r]}</h4>
+              <div class="rp-grid">
+                ${features.map(f=>{
+                  if(f.type==='boolean'){
+                    const checked=perms[r]&&perms[r][f.id]?'checked':'';
+                    return `<div class="rp-item"><label class="rp-checkbox"><input type="checkbox" data-role="${r}" data-feature="${f.id}" ${checked}><span>${f.label}</span></label></div>`;
+                  }else{
+                    return `
+                      <div class="rp-item rp-item-group">
+                        <div class="rp-group-label">${f.label}</div>
+                        <div class="rp-actions">
+                          ${f.actions.map(a=>{
+                            const checked=perms[r]&&perms[r][f.id]&&perms[r][f.id][a]?'checked':'';
+                            const labels={view:'Lihat',create:'Tambah',edit:'Edit',delete:'Hapus',restore:'Pulihkan',delete_permanent:'Hapus Permanen',export:'Ekspor'};
+                            return `<label class="rp-checkbox"><input type="checkbox" data-role="${r}" data-feature="${f.id}" data-action="${a}" ${checked}><span>${labels[a]||a}</span></label>`;
+                          }).join('')}
+                        </div>
+                      </div>`;
+                  }
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    const modal=document.getElementById('modalRolePermissions');
+    if(!modal){
+      const modalHtml=`
+        <div id="modalRolePermissions" class="modal" role="dialog" aria-modal="true" aria-hidden="true" style="display:none">
+          <div class="modal-overlay"></div>
+          <div class="modal-panel modal-xl">
+            <div class="modal-head"><h3>Pengaturan Hak Akses per Role</h3><button class="icon-btn modal-close">&times;</button></div>
+            <div class="modal-body" id="rolePermissionsBody"></div>
+            <div class="modal-foot">
+              <button class="btn btn-ghost" id="btnCancelRolePerms">Batal</button>
+              <button class="btn btn-primary" id="btnSaveRolePerms">Simpan Perubahan</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.insertAdjacentHTML('beforeend',modalHtml);
+      document.getElementById('modalRolePermissions').querySelector('.modal-close').onclick=()=>closeModal('modalRolePermissions');
+      document.getElementById('modalRolePermissions').querySelector('.modal-overlay').onclick=()=>closeModal('modalRolePermissions');
+      document.getElementById('btnCancelRolePerms').onclick=()=>closeModal('modalRolePermissions');
+      document.getElementById('btnSaveRolePerms').onclick=saveRolePermissions;
+    }
+    document.getElementById('rolePermissionsBody').innerHTML=html;
+    const tabs=document.querySelectorAll('.rp-tab');
+    tabs.forEach(t=>t.onclick=()=>{
+      tabs.forEach(tb=>tb.classList.remove('active'));
+      t.classList.add('active');
+      const role=t.dataset.role;
+      document.querySelectorAll('.rp-panel').forEach(p=>p.classList.toggle('active',p.dataset.role===role));
+    });
+    openModal('modalRolePermissions');
+  }catch(e){ toast(e.message,'error'); }
+}
+async function saveRolePermissions(){
+  try{
+    const checkboxes=document.querySelectorAll('#rolePermissionsBody input[type="checkbox"]');
+    const newPerms={};
+    ['admin','staff','kepala','eksternal'].forEach(role=>{
+      newPerms[role]={};
+      checkboxes.forEach(cb=>{
+        if(cb.dataset.role===role){
+          const feature=cb.dataset.feature;
+          const action=cb.dataset.action;
+          if(action){
+            if(!newPerms[role][feature]) newPerms[role][feature]={};
+            newPerms[role][feature][action]=cb.checked;
+          }else{
+            newPerms[role][feature]=cb.checked;
+          }
+        }
+      });
+    });
+    const settings=await api('/api/settings');
+    settings.role_permissions=newPerms;
+    await api('/api/settings',{method:'PUT',body:settings});
+    closeModal('modalRolePermissions');
+    toast('Hak akses berhasil diperbarui','success');
+  }catch(e){ toast(e.message,'error'); }
+}
 document.getElementById('btnSimpanUser').addEventListener('click',async()=>{
   const id=document.getElementById('userId').value;
   const nama=document.getElementById('uNama').value.trim();
