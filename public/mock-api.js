@@ -1135,14 +1135,28 @@
   function laporanRows(dari, sampai, kategori) {
     return filteredRows(dari, sampai, kategori).map(function (a) {
       var k = byId(DB.kategori, a.kategori_id) || {}; var i = byId(DB.instansi, a.instansi_id) || {};
-      return { nomor_arsip: a.nomor_arsip, tanggal_arsip: a.tanggal_arsip, kategori: k.nama || '', nomor_surat: a.nomor_surat || '', judul: a.judul, perihal: a.perihal || '', pengirim: a.pengirim || '', penerima: a.penerima || '', instansi: i.nama || '', status: a.status };
+      var u = byId(DB.unit, a.unit_id) || {}; var l = byId(DB.lokasi, a.lokasi_id) || {};
+      return {
+        nomor_arsip: a.nomor_arsip,
+        tanggal_arsip: a.tanggal_arsip,
+        kategori: (k.kode || '') + ' - ' + (k.nama || ''),
+        nomor_surat: a.nomor_surat || '',
+        judul: a.judul,
+        perihal: a.perihal || '',
+        pengirim: a.pengirim || '',
+        penerima: a.penerima || '',
+        instansi: i.nama || '',
+        unit: u.nama || '',
+        lokasi: (l.kode || '') + ' - ' + (l.nama || ''),
+        status: a.status
+      };
     });
   }
   function csvEscape(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
-  var COLMAP = { 'Nomor Arsip': 'nomor_arsip', 'Tanggal': 'tanggal_arsip', 'Kategori': 'kategori', 'No Surat': 'nomor_surat', 'Judul': 'judul', 'Perihal': 'perihal', 'Pengirim': 'pengirim', 'Penerima': 'penerima', 'Instansi': 'instansi', 'Status': 'status' };
+  var COLMAP = { 'Nomor Arsip': 'nomor_arsip', 'Tanggal': 'tanggal_arsip', 'Kategori': 'kategori', 'No Surat': 'nomor_surat', 'Judul': 'judul', 'Perihal': 'perihal', 'Pengirim': 'pengirim', 'Penerima': 'penerima', 'Instansi': 'instansi', 'Unit': 'unit', 'Lokasi': 'lokasi', 'Status': 'status' };
   function buildCsv(dari, sampai, kategori) {
     var rows = laporanRows(dari, sampai, kategori);
-    var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Status'];
+    var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Unit', 'Lokasi', 'Status'];
     var out = [header.map(csvEscape).join(',')];
     rows.forEach(function (r) { out.push(header.map(function (h) { return csvEscape(r[COLMAP[h]]); }).join(',')); });
     return '\uFEFF' + out.join('\r\n');
@@ -1185,7 +1199,7 @@
   window.__mockExportXlsx = async function (dari, sampai, kategori) {
     await ensureReady();
     var rows = laporanRows(dari, sampai, kategori);
-    var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Status'];
+    var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Unit', 'Lokasi', 'Status'];
     if (typeof window.XLSX === 'undefined') {
       // Fallback ke CSV bila SheetJS tidak termuat
       window.__mockExportCsv(dari, sampai, kategori);
@@ -1193,6 +1207,36 @@
     }
     var data = [header].concat(rows.map(function (r) { return header.map(function (h) { return r[COLMAP[h]]; }); }));
     var ws = window.XLSX.utils.aoa_to_sheet(data);
+
+    // Set lebar kolom otomatis
+    var colWidths = header.map(function (h, idx) {
+      var maxWidth = String(h).length;
+      rows.forEach(function (r) {
+        var val = String(r[COLMAP[h]] || '');
+        if (val.length > maxWidth) maxWidth = val.length;
+      });
+      return { wch: Math.min(Math.max(maxWidth + 2, 12), 50) };
+    });
+    ws['!cols'] = colWidths;
+
+    // Styling header
+    var headerStyle = {
+      fill: { fgColor: { rgb: '0B3B2E' } },
+      font: { sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    // Apply style ke header row
+    for (var i = 0; i < header.length; i++) {
+      var cellRef = window.XLSX.utils.encode_cell({ r: 0, c: i });
+      if (ws[cellRef]) {
+        ws[cellRef].s = headerStyle;
+      }
+    }
+
+    // Freeze baris header
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
     var wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Rekap Arsip');
     var out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

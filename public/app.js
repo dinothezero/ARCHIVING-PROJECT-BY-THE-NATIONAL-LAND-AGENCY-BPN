@@ -1050,8 +1050,8 @@ async function exportSelectedCsv(){
     if(!rows.length) throw new Error('Tidak ada arsip yang bisa diekspor');
     const head=['Nomor Arsip','Tanggal','Kategori','Nomor Surat','Judul','Perihal','Pengirim','Penerima','Instansi','Unit','Lokasi','Status'];
     const lines=[head.map(csvCell).join(',')].concat(rows.map(a=>[
-      a.nomor_arsip,a.tanggal_arsip,((a.kategori_kode||'')+' — '+(a.kategori_nama||'')).trim(),a.nomor_surat,a.judul,a.perihal,
-      a.pengirim,a.penerima,a.instansi_nama,a.unit_nama,a.lokasi_nama||a.lokasi_fisik,STATUS_LABEL[a.status]||a.status
+      a.nomor_arsip,a.tanggal_arsip,((a.kategori_kode||'')+' - '+(a.kategori_nama||'')).trim(),a.nomor_surat,a.judul,a.perihal,
+      a.pengirim,a.penerima,a.instansi_nama,a.unit_nama,((a.lokasi_kode||'')+' - '+(a.lokasi_nama||'')).trim(),STATUS_LABEL[a.status]||a.status
     ].map(csvCell).join(',')));
     downloadTextFile('arsip-terpilih-'+todayLocal()+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
     toast(rows.length+' arsip diekspor ke CSV','success');
