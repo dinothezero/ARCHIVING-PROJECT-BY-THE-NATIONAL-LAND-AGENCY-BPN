@@ -1226,11 +1226,53 @@
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
+    // Styling baris bergantian (zebra striping)
+    var evenRowStyle = {
+      fill: { fgColor: { rgb: 'F0FAF6' } },
+      font: { sz: 10, color: { rgb: '203028' } }
+    };
+    var oddRowStyle = {
+      fill: { fgColor: { rgb: 'FFFFFF' } },
+      font: { sz: 10, color: { rgb: '203028' } }
+    };
+
+    // Styling status
+    var statusStyles = {
+      'aktif': { fill: { fgColor: { rgb: 'D4EDDA' } }, font: { sz: 10, bold: true, color: { rgb: '155724' } } },
+      'arsip': { fill: { fgColor: { rgb: 'E2E3E5' } }, font: { sz: 10, color: { rgb: '383D41' } } },
+      'dipinjam': { fill: { fgColor: { rgb: 'FFF3CD' } }, font: { sz: 10, bold: true, color: { rgb: '856404' } } },
+      'terlambat': { fill: { fgColor: { rgb: 'F8D7DA' } }, font: { sz: 10, bold: true, color: { rgb: '721C24' } } },
+      'dikembalikan': { fill: { fgColor: { rgb: 'D1ECF1' } }, font: { sz: 10, color: { rgb: '0C5460' } } },
+      'hilang': { fill: { fgColor: { rgb: 'F5C6CB' } }, font: { sz: 10, bold: true, color: { rgb: '721C24' } } },
+      'rusak': { fill: { fgColor: { rgb: 'E9ECEF' } }, font: { sz: 10, color: { rgb: '495057' } } }
+    };
+
     // Apply style ke header row
     for (var i = 0; i < header.length; i++) {
       var cellRef = window.XLSX.utils.encode_cell({ r: 0, c: i });
       if (ws[cellRef]) {
         ws[cellRef].s = headerStyle;
+      }
+    }
+
+    // Apply style ke data rows
+    for (var rowIdx = 1; rowIdx <= rows.length; rowIdx++) {
+      var isEven = rowIdx % 2 === 0;
+      var baseStyle = isEven ? evenRowStyle : oddRowStyle;
+      var rowData = rows[rowIdx - 1];
+
+      for (var colIdx = 0; colIdx < header.length; colIdx++) {
+        var cellRef = window.XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
+        if (ws[cellRef]) {
+          // Cek apakah ini kolom status
+          if (header[colIdx] === 'Status' && rowData.status) {
+            var statusLower = String(rowData.status).toLowerCase();
+            var statusStyle = statusStyles[statusLower] || baseStyle;
+            ws[cellRef].s = statusStyle;
+          } else {
+            ws[cellRef].s = baseStyle;
+          }
+        }
       }
     }
 
