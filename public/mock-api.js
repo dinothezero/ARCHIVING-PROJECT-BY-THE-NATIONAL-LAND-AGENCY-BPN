@@ -1200,89 +1200,121 @@
     await ensureReady();
     var rows = laporanRows(dari, sampai, kategori);
     var header = ['Nomor Arsip', 'Tanggal', 'Kategori', 'No Surat', 'Judul', 'Perihal', 'Pengirim', 'Penerima', 'Instansi', 'Unit', 'Lokasi', 'Status'];
-    if (typeof window.XLSX === 'undefined') {
-      // Fallback ke CSV bila SheetJS tidak termuat
+    
+    if (typeof window.ExcelJS === 'undefined') {
+      // Fallback ke CSV bila ExcelJS tidak termuat
       window.__mockExportCsv(dari, sampai, kategori);
       return;
     }
-    var data = [header].concat(rows.map(function (r) { return header.map(function (h) { return r[COLMAP[h]]; }); }));
-    var ws = window.XLSX.utils.aoa_to_sheet(data);
 
-    // Set lebar kolom otomatis
-    var colWidths = header.map(function (h, idx) {
-      var maxWidth = String(h).length;
-      rows.forEach(function (r) {
-        var val = String(r[COLMAP[h]] || '');
-        if (val.length > maxWidth) maxWidth = val.length;
+    try {
+      var workbook = new ExcelJS.Workbook();
+      var worksheet = workbook.addWorksheet('Rekap Arsip');
+
+      // Tambah header dengan styling
+      var headerRow = worksheet.addRow(header);
+      headerRow.eachCell(function (cell) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '0B3B2E' }
+        };
+        cell.font = {
+          bold: true,
+          color: { argb: 'FFFFFF' },
+          size: 11
+        };
+        cell.alignment = {
+          horizontal: 'center',
+          vertical: 'middle'
+        };
       });
-      return { wch: Math.min(Math.max(maxWidth + 2, 12), 50) };
-    });
-    ws['!cols'] = colWidths;
 
-    // Styling header
-    var headerStyle = {
-      fill: { fgColor: { rgb: '0B3B2E' } },
-      font: { sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
+      // Tambah data dengan styling zebra striping
+      rows.forEach(function (r, idx) {
+        var rowData = header.map(function (h) { return r[COLMAP[h]]; });
+        var row = worksheet.addRow(rowData);
+        var isEven = (idx + 1) % 2 === 0;
 
-    // Styling baris bergantian (zebra striping)
-    var evenRowStyle = {
-      fill: { fgColor: { rgb: 'F0FAF6' } },
-      font: { sz: 10, color: { rgb: '203028' } }
-    };
-    var oddRowStyle = {
-      fill: { fgColor: { rgb: 'FFFFFF' } },
-      font: { sz: 10, color: { rgb: '203028' } }
-    };
-
-    // Styling status
-    var statusStyles = {
-      'aktif': { fill: { fgColor: { rgb: 'D4EDDA' } }, font: { sz: 10, bold: true, color: { rgb: '155724' } } },
-      'arsip': { fill: { fgColor: { rgb: 'E2E3E5' } }, font: { sz: 10, color: { rgb: '383D41' } } },
-      'dipinjam': { fill: { fgColor: { rgb: 'FFF3CD' } }, font: { sz: 10, bold: true, color: { rgb: '856404' } } },
-      'terlambat': { fill: { fgColor: { rgb: 'F8D7DA' } }, font: { sz: 10, bold: true, color: { rgb: '721C24' } } },
-      'dikembalikan': { fill: { fgColor: { rgb: 'D1ECF1' } }, font: { sz: 10, color: { rgb: '0C5460' } } },
-      'hilang': { fill: { fgColor: { rgb: 'F5C6CB' } }, font: { sz: 10, bold: true, color: { rgb: '721C24' } } },
-      'rusak': { fill: { fgColor: { rgb: 'E9ECEF' } }, font: { sz: 10, color: { rgb: '495057' } } }
-    };
-
-    // Apply style ke header row
-    for (var i = 0; i < header.length; i++) {
-      var cellRef = window.XLSX.utils.encode_cell({ r: 0, c: i });
-      if (ws[cellRef]) {
-        ws[cellRef].s = headerStyle;
-      }
-    }
-
-    // Apply style ke data rows
-    for (var rowIdx = 1; rowIdx <= rows.length; rowIdx++) {
-      var isEven = rowIdx % 2 === 0;
-      var baseStyle = isEven ? evenRowStyle : oddRowStyle;
-      var rowData = rows[rowIdx - 1];
-
-      for (var colIdx = 0; colIdx < header.length; colIdx++) {
-        var cellRef = window.XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
-        if (ws[cellRef]) {
-          // Cek apakah ini kolom status
-          if (header[colIdx] === 'Status' && rowData.status) {
-            var statusLower = String(rowData.status).toLowerCase();
-            var statusStyle = statusStyles[statusLower] || baseStyle;
-            ws[cellRef].s = statusStyle;
+        row.eachCell(function (cell, colNumber) {
+          // Styling baris bergantian
+          if (isEven) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'F0FAF6' }
+            };
           } else {
-            ws[cellRef].s = baseStyle;
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFFF' }
+            };
           }
-        }
+          cell.font = {
+            size: 10,
+            color: { argb: '203028' }
+          };
+
+          // Styling khusus untuk kolom status
+          if (header[colNumber - 1] === 'Status' && r.status) {
+            var statusLower = String(r.status).toLowerCase();
+            var statusColors = {
+              'aktif': { bg: 'D4EDDA', fg: '155724', bold: true },
+              'arsip': { bg: 'E2E3E5', fg: '383D41', bold: false },
+              'dipinjam': { bg: 'FFF3CD', fg: '856404', bold: true },
+              'terlambat': { bg: 'F8D7DA', fg: '721C24', bold: true },
+              'dikembalikan': { bg: 'D1ECF1', fg: '0C5460', bold: false },
+              'hilang': { bg: 'F5C6CB', fg: '721C24', bold: true },
+              'rusak': { bg: 'E9ECEF', fg: '495057', bold: false }
+            };
+            var sc = statusColors[statusLower];
+            if (sc) {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: sc.bg }
+              };
+              cell.font = {
+                size: 10,
+                bold: sc.bold,
+                color: { argb: sc.fg }
+              };
+            }
+          }
+        });
+      });
+
+      // Set lebar kolom otomatis
+      worksheet.columns.forEach(function (column, idx) {
+        var maxLength = 0;
+        column.eachCell({ includeEmpty: true }, function (cell) {
+          var value = String(cell.value || '');
+          if (value.length > maxLength) {
+            maxLength = value.length;
+          }
+        });
+        var width = Math.min(Math.max(maxLength + 2, 12), 50);
+        column.width = width;
+      });
+
+      // Freeze baris header
+      worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+
+      // Generate buffer
+      var buffer = await workbook.xlsx.writeBuffer();
+      var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      if (typeof window.saveAs === 'function') {
+        window.saveAs(blob, 'rekap-arsip-' + Date.now() + '.xlsx');
+      } else {
+        downloadBlob(blob, 'rekap-arsip-' + Date.now() + '.xlsx');
       }
+    } catch (e) {
+      console.error('ExcelJS error:', e);
+      // Fallback ke CSV jika error
+      window.__mockExportCsv(dari, sampai, kategori);
     }
-
-    // Freeze baris header
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-
-    var wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, 'Rekap Arsip');
-    var out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    downloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'rekap-arsip-' + Date.now() + '.xlsx');
   };
 
   window.__mockBackup = async function () {
