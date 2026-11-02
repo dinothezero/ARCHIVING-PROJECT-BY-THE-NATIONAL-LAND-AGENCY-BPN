@@ -195,12 +195,14 @@ function getRecentArsip() {
 const ROLE_META = {
   admin: { label: 'Administrator', chip: 'role-admin', avatar: 'av-admin', summary: 'Akses penuh ke seluruh sistem' },
   staff: { label: 'Staf Arsip', chip: 'role-staff', avatar: 'av-staff', summary: 'Operasional arsip sehari-hari' },
-  kepala: { label: 'Kepala Kantor', chip: 'role-kepala', avatar: 'av-kepala', summary: 'Pengawasan dan disposisi' }
+  kepala: { label: 'Kepala Kantor', chip: 'role-kepala', avatar: 'av-kepala', summary: 'Pengawasan dan disposisi' },
+  eksternal: { label: 'Pengguna Eksternal', chip: 'role-eksternal', avatar: 'av-staff', summary: 'Akses terbatas: hanya melihat arsip dan laporan' }
 };
 const ROLE_PERM = {
   admin: 'Akses penuh: semua menu, pengguna, pengaturan kantor, log aktivitas, backup, dan hapus permanen.',
   staff: 'Operasional: kelola arsip, agenda, disposisi, peminjaman, laporan, dan data master. Tanpa pengguna & pengaturan.',
-  kepala: 'Pengawasan: lihat arsip, agenda, laporan, dan peminjaman; buat serta tindak lanjuti disposisi tanpa mengubah arsip.'
+  kepala: 'Pengawasan: lihat arsip, agenda, laporan, dan peminjaman; buat serta tindak lanjuti disposisi tanpa mengubah arsip.',
+  eksternal: 'Akses terbatas: hanya bisa melihat arsip, mencari, dan laporan. Tidak bisa mengedit, menghapus, atau mengubah data.'
 };
 function roleMeta(role) { return ROLE_META[role] || ROLE_META.staff; }
 function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
@@ -1381,16 +1383,17 @@ document.getElementById('btnSimpanMaster').addEventListener('click',async()=>{ c
 });
 
 /* ============ USERS ============ */
-const ROLE_NAMES={admin:'Administrator',staff:'Staf Arsip',kepala:'Kepala Kantor'};
+const ROLE_NAMES={admin:'Administrator',staff:'Staf Arsip',kepala:'Kepala Kantor',eksternal:'Pengguna Eksternal'};
 function syncRoleHint(){
   const hint=document.getElementById('uRoleHint'), role=document.getElementById('uRole');
   if(hint&&role) hint.textContent=ROLE_PERM[role.value]||'';
 }
 async function loadUsersPage(){ if(!isAdmin()) return; try{ const d=(await api('/api/users'))||[]; const tb=document.getElementById('usersBody'); if(!tb)return; state.userMap={}; d.forEach(u=>state.userMap[u.id]=u);
-  const counts={admin:0,staff:0,kepala:0}; d.forEach(u=>{ counts[u.role]=(counts[u.role]||0)+1; });
+  const counts={admin:0,staff:0,kepala:0,eksternal:0}; d.forEach(u=>{ counts[u.role]=(counts[u.role]||0)+1; });
   const ca=document.getElementById('rcCountAdmin'); if(ca) ca.textContent=counts.admin+' pengguna';
   const cs=document.getElementById('rcCountStaff'); if(cs) cs.textContent=counts.staff+' pengguna';
   const ck=document.getElementById('rcCountKepala'); if(ck) ck.textContent=counts.kepala+' pengguna';
+  const ce=document.getElementById('rcCountEksternal'); if(ce) ce.textContent=counts.eksternal+' pengguna';
   tb.innerHTML=d.map(u=>{ const meta=roleMeta(u.role); const av=isFotoSrc(u.foto)?`<div class="user-avatar ${meta.avatar} has-foto"><img src="${esc(u.foto)}" alt=""></div>`:`<div class="user-avatar ${meta.avatar}">${esc((u.nama||'?').charAt(0).toUpperCase())}</div>`; return `<tr><td><div class="user-cell">${av}<div class="user-cell-meta"><strong>${esc(u.nama)}</strong><span>${esc(u.jabatan||meta.label)}</span></div></div></td><td class="mono">${esc(u.username)}</td><td><span class="chip role-chip ${meta.chip}">${ROLE_NAMES[u.role]||esc(u.role)}</span></td><td><span class="badge ${u.aktif?'badge-aktif':'badge-hilang'}">${u.aktif?'Aktif':'Nonaktif'}</span></td><td>${u.last_login?formatDateTime(u.last_login):'-'}</td><td class="th-actions"><div class="cell-actions">
     <button class="btn btn-sm btn-ghost" onclick="resetPass(${u.id})">Reset Pass</button>
     <button class="icon-btn" onclick="editUser(${u.id})" title="Edit">${ICONS.edit}</button>
@@ -1415,6 +1418,12 @@ function buildUsersLayout(){ const sec=document.getElementById('page-users'); if
         <p>Memantau dan memberi arahan tanpa mengubah data.</p>
         <ul><li>Lihat arsip, laporan &amp; agenda</li><li>Buat dan tindak lanjuti disposisi</li><li>Pantau peminjaman</li><li>Tanpa ubah arsip, master, pengguna</li></ul>
         <span class="rc-count" id="rcCountKepala">0 pengguna</span>
+      </div>
+      <div class="role-card">
+        <div class="rc-head"><h4>Pengguna Eksternal</h4><span class="chip role-chip role-eksternal">Akses Terbatas</span></div>
+        <p>Pihak luar yang hanya bisa melihat data.</p>
+        <ul><li>Lihat arsip, cari &amp; filter</li><li>Lihat laporan &amp; agenda</li><li>Tidak bisa mengedit atau menghapus</li><li>Akses read-only untuk arsip</li></ul>
+        <span class="rc-count" id="rcCountEksternal">0 pengguna</span>
       </div>
     </div>
     <div class="panel"><div class="table-scroll"><table class="data-table"><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th class="th-actions">Aksi</th></tr></thead><tbody id="usersBody"></tbody></table></div></div>`;

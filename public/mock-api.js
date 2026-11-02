@@ -137,7 +137,8 @@
       users: [
         { id: 1, username: 'admin', password_hash: hash, nama: 'Administrator', jabatan: 'Administrator Sistem', foto: null, role: 'admin', aktif: 1, last_login: null, created_at: nowIso() },
         { id: 2, username: 'staff1', password_hash: hash, nama: 'Staff Arsip', jabatan: 'Pengelola Arsip', foto: null, role: 'staff', aktif: 1, last_login: null, created_at: nowIso() },
-        { id: 3, username: 'kepala1', password_hash: hash, nama: 'Kepala Bidang', jabatan: 'Kepala Kantor', foto: null, role: 'kepala', aktif: 1, last_login: null, created_at: nowIso() }
+        { id: 3, username: 'kepala1', password_hash: hash, nama: 'Kepala Bidang', jabatan: 'Kepala Kantor', foto: null, role: 'kepala', aktif: 1, last_login: null, created_at: nowIso() },
+        { id: 4, username: 'eksternal1', password_hash: hash, nama: 'Pengguna Eksternal', jabatan: 'Pihak Luar', foto: null, role: 'eksternal', aktif: 1, last_login: null, created_at: nowIso() }
       ],
       kategori: KATEGORI.map(function (k, i) { return { id: i + 1, kode: k[0], nama: k[1], deskripsi: k[2], created_at: nowIso() }; }),
       unit: UNIT.map(function (u, i) { return { id: i + 1, kode: u[0], nama: u[1], aktif: 1, created_at: nowIso() }; }),
@@ -344,7 +345,7 @@
       au.nama = an; au.jabatan = aj || null;
       if (Object.prototype.hasOwnProperty.call(body, 'role')) {
         if (au.role !== 'admin') throw new Error('Hanya Administrator yang dapat mengubah role');
-        if (!['admin', 'staff', 'kepala'].includes(body.role)) throw new Error('Role tidak valid');
+        if (!['admin', 'staff', 'kepala', 'eksternal'].includes(body.role)) throw new Error('Role tidak valid');
         var activeAdmins = DB.users.filter(function (u) { return u.role === 'admin' && u.aktif; }).length;
         if (body.role !== 'admin' && activeAdmins <= 1) throw new Error('Harus tersisa minimal satu admin aktif');
         au.role = body.role;
@@ -391,7 +392,7 @@
       var nm = String(body.nama || '').trim();
       var rl = body.role || 'staff';
       if (!un || !nm || !body.password || String(body.password).length < 6) throw new Error('Data tidak lengkap / password minimal 6 karakter');
-      if (['admin', 'staff', 'kepala'].indexOf(rl) === -1) throw new Error('Role tidak valid');
+      if (['admin', 'staff', 'kepala', 'eksternal'].indexOf(rl) === -1) throw new Error('Role tidak valid');
       if (String(body.jabatan || '').trim().length > 80) throw new Error('Jabatan maksimal 80 karakter');
       if (DB.users.some(function (x) { return x.username === un; })) throw new Error('Username sudah dipakai');
       var nu = { id: nextId(DB.users), username: un, password_hash: await hashPassword(String(body.password)), nama: nm, jabatan: String(body.jabatan || '').trim() || null, foto: null, role: rl, aktif: 1, last_login: null, created_at: nowIso() };
@@ -406,7 +407,7 @@
       var eu = byId(DB.users, mUser[1]); if (!eu) throw new Error('Pengguna tidak ditemukan');
       var enama = String(body.nama || '').trim();
       if (!enama) throw new Error('Nama tidak boleh kosong');
-      if (['admin', 'staff', 'kepala'].indexOf(body.role) === -1) throw new Error('Role tidak valid');
+      if (['admin', 'staff', 'kepala', 'eksternal'].indexOf(body.role) === -1) throw new Error('Role tidak valid');
       var ejab = Object.prototype.hasOwnProperty.call(body, 'jabatan') ? String(body.jabatan || '').trim() : String(eu.jabatan || '');
       if (ejab.length > 80) throw new Error('Jabatan maksimal 80 karakter');
       var jadiAktif = body.aktif ? 1 : 0;

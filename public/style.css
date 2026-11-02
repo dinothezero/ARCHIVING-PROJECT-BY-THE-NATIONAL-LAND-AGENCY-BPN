@@ -122,6 +122,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .role-admin{background:var(--gold-soft);border-color:#e7cf94;color:#7a5a1e}
 .role-staff{background:var(--green-50);border-color:var(--green-100);color:var(--green-800)}
 .role-kepala{background:#eaf2f8;border-color:#cfe0eb;color:var(--navy)}
+.role-eksternal{background:#f5e6d3;border-color:#e8d4b8;color:#8b5a2b}
 .user-caret{color:var(--muted-2);flex-shrink:0;transition:transform .18s ease}
 .topbar-user[aria-expanded="true"] .user-caret{transform:rotate(180deg)}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;border-radius:10px;background:var(--green-50);color:var(--green-800);cursor:pointer;transition:background .15s,color .15s}
